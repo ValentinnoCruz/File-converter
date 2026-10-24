@@ -1,0 +1,14 @@
+## Visual Studio & .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+
+## Test results
+TestResults/
+*.trx
