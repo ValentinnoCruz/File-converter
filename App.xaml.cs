@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using Microsoft.Win32;
@@ -13,6 +14,14 @@ namespace RadialConvert;
 
 public partial class App : System.Windows.Application
 {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AttachConsole(int dwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const int ATTACH_PARENT_PROCESS = -1;
+
     private static Mutex? _singleInstanceMutex;
     private TrayIconManager? _trayManager;
     private GlobalInputHook? _inputHook;
@@ -24,11 +33,15 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Attach to calling PowerShell/CMD console if available
+        AttachConsole(ATTACH_PARENT_PROCESS);
+
         // Ensure single running instance
         const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
         _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
         if (!createdNew)
         {
+            Console.WriteLine("\n[Open Tangerine] App is already running in your system tray.");
             System.Windows.MessageBox.Show(
                 "Open Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
                 "Open Tangerine Already Active",
@@ -63,10 +76,19 @@ public partial class App : System.Windows.Application
 
         _inputHook.Start();
 
-        // If user passed --window argument, show desktop window immediately
-        if (e.Args.Contains("--window", StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine("\n=======================================================");
+        Console.WriteLine("  Open Tangerine (Windows Native) is running!");
+        Console.WriteLine("  - Desktop batch window opened.");
+        Console.WriteLine("  - Hold SHIFT + RIGHT-CLICK on any file in File Explorer");
+        Console.WriteLine("    to open the frosted glass conversion wheel.");
+        Console.WriteLine("=======================================================\n");
+
+        // Show window by default unless user launched explicitly with --background
+        bool startInBackground = e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase);
+        if (!startInBackground)
         {
             _mainWindow.Show();
+            _mainWindow.Activate();
         }
     }
 
