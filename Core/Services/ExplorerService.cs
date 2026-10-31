@@ -56,33 +56,35 @@ public class ExplorerService
         return false;
     }
 
-    public string? GetTargetFilePath(POINT pt)
+    public IReadOnlyList<string> GetTargetFilePaths(POINT pt)
     {
+        var results = new List<string>();
+
         try
         {
             if (!IsExplorerOrDesktopWindow(pt, out IntPtr rootHwnd))
             {
-                return null;
+                return results;
             }
 
             string rootClass = GetWindowClassName(rootHwnd);
             Type? shellType = Type.GetTypeFromProgID("Shell.Application");
-            if (shellType == null) return null;
+            if (shellType == null) return results;
 
             dynamic? shell = Activator.CreateInstance(shellType);
-            if (shell == null) return null;
+            if (shell == null) return results;
 
             // Case 1: Desktop
             if (rootClass is "Progman" or "WorkerW")
             {
-                var desktopPath = GetDesktopSelectedFilePath(shell);
-                if (!string.IsNullOrEmpty(desktopPath) && File.Exists(desktopPath))
+                var desktopPaths = GetDesktopSelectedFilePaths(shell);
+                if (desktopPaths.Count > 0)
                 {
-                    return desktopPath;
+                    return desktopPaths;
                 }
             }
 
-            // Case 2: Open Explorer Window
+            // Case 2: Open Explorer Window matching rootHwnd or foreground
             dynamic windows = shell.Windows();
             for (int i = 0; i < windows.Count; i++)
             {
@@ -91,23 +93,19 @@ public class ExplorerService
                     dynamic window = windows.Item(i);
                     IntPtr hwnd = (IntPtr)(long)window.HWND;
 
-                    // Match root HWND or any active window
                     if (hwnd == rootHwnd || windows.Count == 1)
                     {
-                        var path = GetPathFromWindowDocument(window);
-                        if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                        var paths = GetPathsFromWindowDocument(window);
+                        if (paths.Count > 0)
                         {
-                            return path;
+                            return paths;
                         }
                     }
                 }
-                catch
-                {
-                    // Continue checking next window
-                }
+                catch { }
             }
 
-            // Fallback: Check all shell windows if foreground window matches
+            // Fallback: Check foreground window
             IntPtr foreground = GetForegroundWindow();
             for (int i = 0; i < windows.Count; i++)
             {
@@ -117,33 +115,40 @@ public class ExplorerService
                     IntPtr hwnd = (IntPtr)(long)window.HWND;
                     if (hwnd == foreground)
                     {
-                        var path = GetPathFromWindowDocument(window);
-                        if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                        var paths = GetPathsFromWindowDocument(window);
+                        if (paths.Count > 0)
                         {
-                            return path;
+                            return paths;
                         }
                     }
                 }
                 catch { }
             }
 
-            // Fallback: UI Automation hit test
+            // Fallback: UI Automation single file lookup
             var uiaPath = GetPathFromUIAutomation(pt);
             if (!string.IsNullOrEmpty(uiaPath) && File.Exists(uiaPath))
             {
-                return uiaPath;
+                results.Add(uiaPath);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"GetTargetFilePath error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"GetTargetFilePaths error: {ex.Message}");
         }
 
-        return null;
+        return results;
     }
 
-    private string? GetDesktopSelectedFilePath(dynamic shell)
+    public string? GetTargetFilePath(POINT pt)
     {
+        var paths = GetTargetFilePaths(pt);
+        return paths.Count > 0 ? paths[0] : null;
+    }
+
+    private List<string> GetDesktopSelectedFilePaths(dynamic shell)
+    {
+        var list = new List<string>();
         try
         {
             object pvarLoc = 0;
@@ -151,40 +156,53 @@ public class ExplorerService
             dynamic desktop = shell.Windows().FindWindowSW(ref pvarLoc, ref pvarLocRoot, 8, out int pHWND, 1);
             if (desktop?.Document != null)
             {
-                return GetPathFromWindowDocument(desktop);
+                return GetPathsFromWindowDocument(desktop);
             }
         }
         catch { }
-        return null;
+        return list;
     }
 
-    private string? GetPathFromWindowDocument(dynamic window)
+    private List<string> GetPathsFromWindowDocument(dynamic window)
     {
+        var list = new List<string>();
         try
         {
             dynamic doc = window.Document;
-            if (doc == null) return null;
+            if (doc == null) return list;
 
             dynamic? selected = doc.SelectedItems();
-            if (selected != null && ((int?)selected?.Count ?? 0) > 0)
+            int count = (int?)selected?.Count ?? 0;
+            if (count > 0)
             {
-                dynamic? first = selected?.Item(0);
-                if (first != null)
+                for (int i = 0; i < count; i++)
                 {
-                    string path = (string)first.Path;
-                    if (!string.IsNullOrEmpty(path)) return path;
+                    dynamic? item = selected?.Item(i);
+                    if (item != null)
+                    {
+                        string path = (string)item.Path;
+                        if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                        {
+                            list.Add(path);
+                        }
+                    }
                 }
+                if (list.Count > 0) return list;
             }
 
+            // If no multi-selection, try focused item
             dynamic focused = doc.FocusedItem;
             if (focused != null)
             {
                 string path = (string)focused.Path;
-                if (!string.IsNullOrEmpty(path)) return path;
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    list.Add(path);
+                }
             }
         }
         catch { }
-        return null;
+        return list;
     }
 
     private string? GetPathFromUIAutomation(POINT pt)
@@ -194,14 +212,11 @@ public class ExplorerService
             var element = AutomationElement.FromPoint(new System.Windows.Point(pt.X, pt.Y));
             if (element == null) return null;
 
-            // In Explorer, item name might be the file name
             string name = element.Current.Name;
             if (string.IsNullOrWhiteSpace(name)) return null;
 
-            // Check if name itself is a full path
             if (File.Exists(name)) return name;
 
-            // Try Desktop folder
             var desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             var candidateDesktop = Path.Combine(desktopDir, name);
             if (File.Exists(candidateDesktop)) return candidateDesktop;

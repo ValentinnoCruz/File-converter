@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows;
 using Microsoft.Win32;
@@ -16,66 +18,55 @@ public partial class App : System.Windows.Application
     private GlobalInputHook? _inputHook;
     private ExplorerService? _explorerService;
     private ImageConverter? _imageConverter;
+    private MainWindow? _mainWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         // Ensure single running instance
-        const string mutexName = "Global\\QuickConvert_SingleInstance_Mutex";
+        const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
         _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
         if (!createdNew)
         {
             System.Windows.MessageBox.Show(
-                "QuickConvert is already running in your system tray.\nLook for the QuickConvert icon in the bottom right notification area.",
-                "QuickConvert Already Running",
+                "Open Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
+                "Open Tangerine Already Active",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Shutdown();
             return;
         }
 
-        // Keep app alive even without active windows
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         _explorerService = new ExplorerService();
         _imageConverter = new ImageConverter();
+        _mainWindow = new MainWindow(_imageConverter);
 
         _trayManager = new TrayIconManager();
         _trayManager.OnRequestExit = () => Shutdown();
-        _trayManager.OnRequestTestConversion = HandleManualTest;
+        _trayManager.OnRequestOpenWindow = () =>
+        {
+            _mainWindow.Show();
+            _mainWindow.WindowState = WindowState.Normal;
+            _mainWindow.Activate();
+        };
 
         _inputHook = new GlobalInputHook(
             _explorerService,
             _imageConverter,
-            onConversionSuccess: (createdPath) =>
+            onConversionSuccess: (createdPaths) =>
             {
-                _trayManager.NotifyConversion(createdPath);
+                _trayManager.NotifyConversions(createdPaths);
             });
 
         _inputHook.Start();
-    }
 
-    private void HandleManualTest()
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        // If user passed --window argument, show desktop window immediately
+        if (e.Args.Contains("--window", StringComparer.OrdinalIgnoreCase))
         {
-            Title = "Select an Image to Test QuickConvert Wheel",
-            Filter = "Image Files (*.webp;*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.webp;*.png;*.jpg;*.jpeg;*.bmp;*.gif|All Files (*.*)|*.*"
-        };
-
-        if (dialog.ShowDialog() == true && _imageConverter != null)
-        {
-            string file = dialog.FileName;
-            var options = _imageConverter.GetOptions(file);
-            if (options.Count > 0)
-            {
-                // Position near center of screen
-                double screenW = SystemParameters.PrimaryScreenWidth;
-                double screenH = SystemParameters.PrimaryScreenHeight;
-                var testWheel = new RadialMenuWindow(file, options, screenW / 2.0, screenH / 2.0);
-                testWheel.Show();
-            }
+            _mainWindow.Show();
         }
     }
 

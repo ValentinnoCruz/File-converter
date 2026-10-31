@@ -3,81 +3,150 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 
 namespace RadialConvert.UI;
 
 public static class RadialGeometryHelper
 {
-    public static PathGeometry CreatePieSliceGeometry(
+    public const double CenterX = 190.0;
+    public const double CenterY = 190.0;
+    public const double OuterRadius = 174.0;
+    public const double InnerRadius = 72.0;
+
+    public static Point GetPointOnCircle(Point center, double radius, double angleDeg)
+    {
+        double rad = angleDeg * Math.PI / 180.0;
+        return new Point(
+            center.X + radius * Math.Cos(rad),
+            center.Y + radius * Math.Sin(rad));
+    }
+
+    public static PathGeometry CreateRoundedGlassSegmentGeometry(
         Point center,
-        double innerRadius,
-        double outerRadius,
-        double startAngleDeg,
-        double endAngleDeg)
+        int index,
+        int count,
+        double outerRadius = OuterRadius,
+        double innerRadius = InnerRadius)
     {
         var geom = new PathGeometry();
-        var figure = new PathFigure();
+        if (count <= 0) return geom;
 
-        double startRad = (startAngleDeg - 90) * Math.PI / 180.0;
-        double endRad = (endAngleDeg - 90) * Math.PI / 180.0;
-        double angleDiff = endAngleDeg - startAngleDeg;
-        bool isLargeArc = angleDiff > 180.0;
+        if (count == 1)
+        {
+            // Full doughnut ring
+            var fig = new PathFigure
+            {
+                StartPoint = new Point(center.X + outerRadius, center.Y),
+                IsClosed = true
+            };
+            fig.Segments.Add(new ArcSegment(new Point(center.X - outerRadius, center.Y), new Size(outerRadius, outerRadius), 0, false, SweepDirection.Clockwise, true));
+            fig.Segments.Add(new ArcSegment(new Point(center.X + outerRadius, center.Y), new Size(outerRadius, outerRadius), 0, false, SweepDirection.Clockwise, true));
 
-        Point pOuterStart = new Point(
-            center.X + outerRadius * Math.Cos(startRad),
-            center.Y + outerRadius * Math.Sin(startRad));
+            var innerFig = new PathFigure
+            {
+                StartPoint = new Point(center.X + innerRadius, center.Y),
+                IsClosed = true
+            };
+            innerFig.Segments.Add(new ArcSegment(new Point(center.X - innerRadius, center.Y), new Size(innerRadius, innerRadius), 0, false, SweepDirection.Counterclockwise, true));
+            innerFig.Segments.Add(new ArcSegment(new Point(center.X + innerRadius, center.Y), new Size(innerRadius, innerRadius), 0, false, SweepDirection.Counterclockwise, true));
 
-        Point pOuterEnd = new Point(
-            center.X + outerRadius * Math.Cos(endRad),
-            center.Y + outerRadius * Math.Sin(endRad));
+            geom.Figures.Add(fig);
+            geom.Figures.Add(innerFig);
+            geom.FillRule = FillRule.EvenOdd;
+            return geom;
+        }
 
-        Point pInnerEnd = new Point(
-            center.X + innerRadius * Math.Cos(endRad),
-            center.Y + innerRadius * Math.Sin(endRad));
+        double step = 360.0 / count;
+        // Centers sector i at (index * step - 90 deg) like Open Tangerine
+        double midAngle = index * step - 90.0;
+        double gapDeg = count >= 6 ? 2.5 : 2.0;
+        double startAngle = midAngle - (step / 2.0) + gapDeg;
+        double endAngle = midAngle + (step / 2.0) - gapDeg;
 
-        Point pInnerStart = new Point(
-            center.X + innerRadius * Math.Cos(startRad),
-            center.Y + innerRadius * Math.Sin(startRad));
+        double rounding = Math.Min(5.0, step / 8.0);
+        double midInnerRadius = innerRadius + 13.0; // corner curve transition
+        double midOuterRadius = outerRadius - 13.0;
 
-        figure.StartPoint = pOuterStart;
+        Point p1 = GetPointOnCircle(center, outerRadius, startAngle + rounding);
+        Point p2 = GetPointOnCircle(center, outerRadius, endAngle - rounding);
+        Point cornerOuterEnd = GetPointOnCircle(center, outerRadius, endAngle);
+        Point radialOuterEnd = GetPointOnCircle(center, midOuterRadius, endAngle);
+        Point radialInnerEnd = GetPointOnCircle(center, midInnerRadius, endAngle);
+        Point cornerInnerEnd = GetPointOnCircle(center, innerRadius, endAngle);
+        Point p3 = GetPointOnCircle(center, innerRadius, endAngle - (rounding * 1.7));
+        Point p4 = GetPointOnCircle(center, innerRadius, startAngle + (rounding * 1.7));
+        Point cornerInnerStart = GetPointOnCircle(center, innerRadius, startAngle);
+        Point radialInnerStart = GetPointOnCircle(center, midInnerRadius, startAngle);
+        Point radialOuterStart = GetPointOnCircle(center, midOuterRadius, startAngle);
+        Point cornerOuterStart = GetPointOnCircle(center, outerRadius, startAngle);
 
-        // Outer arc
-        figure.Segments.Add(new ArcSegment(
-            pOuterEnd,
-            new Size(outerRadius, outerRadius),
-            0,
-            isLargeArc,
-            SweepDirection.Clockwise,
-            true));
+        var figure = new PathFigure
+        {
+            StartPoint = p1,
+            IsClosed = true,
+            IsFilled = true
+        };
 
-        // Line to inner end
-        figure.Segments.Add(new LineSegment(pInnerEnd, true));
+        // Outer arc from p1 to p2
+        bool isLargeOuter = (endAngle - startAngle - 2 * rounding) > 180.0;
+        figure.Segments.Add(new ArcSegment(p2, new Size(outerRadius, outerRadius), 0, isLargeOuter, SweepDirection.Clockwise, true));
 
-        // Inner arc back
-        figure.Segments.Add(new ArcSegment(
-            pInnerStart,
-            new Size(innerRadius, innerRadius),
-            0,
-            isLargeArc,
-            SweepDirection.Counterclockwise,
-            true));
+        // Rounded corner at outer end to radial line
+        figure.Segments.Add(new QuadraticBezierSegment(cornerOuterEnd, radialOuterEnd, true));
 
-        figure.IsClosed = true;
+        // Radial line down towards inner radius
+        figure.Segments.Add(new LineSegment(radialInnerEnd, true));
+
+        // Rounded corner into inner arc
+        figure.Segments.Add(new QuadraticBezierSegment(cornerInnerEnd, p3, true));
+
+        // Inner arc back from p3 to p4
+        bool isLargeInner = (endAngle - startAngle - 3.4 * rounding) > 180.0;
+        figure.Segments.Add(new ArcSegment(p4, new Size(innerRadius, innerRadius), 0, isLargeInner, SweepDirection.Counterclockwise, true));
+
+        // Rounded corner into radial line
+        figure.Segments.Add(new QuadraticBezierSegment(cornerInnerStart, radialInnerStart, true));
+
+        // Radial line up towards outer radius
+        figure.Segments.Add(new LineSegment(radialOuterStart, true));
+
+        // Rounded corner back to p1
+        figure.Segments.Add(new QuadraticBezierSegment(cornerOuterStart, p1, true));
+
         geom.Figures.Add(figure);
         return geom;
     }
 
-    public static Point GetLabelPosition(
-        Point center,
-        double radius,
-        double startAngleDeg,
-        double endAngleDeg)
+    public static Point GetLabelPosition(Point center, int index, int count, double radius = 123.0)
     {
-        double midAngleDeg = (startAngleDeg + endAngleDeg) / 2.0;
-        double midRad = (midAngleDeg - 90) * Math.PI / 180.0;
+        double step = 360.0 / count;
+        double midAngle = index * step - 90.0;
+        return GetPointOnCircle(center, radius, midAngle);
+    }
 
-        return new Point(
-            center.X + radius * Math.Cos(midRad),
-            center.Y + radius * Math.Sin(midRad));
+    public static int GetSectorIndex(Point mousePoint, Point center, int count, double minRadius = InnerRadius, double maxRadius = OuterRadius + 2.0)
+    {
+        if (count <= 0) return -1;
+
+        double dx = mousePoint.X - center.X;
+        double dy = mousePoint.Y - center.Y;
+        double dist = Math.Sqrt(dx * dx + dy * dy);
+
+        if (dist < minRadius || dist > maxRadius)
+        {
+            return -1; // Center hub or outside wheel
+        }
+
+        double step = 360.0 / count;
+        // In Open Tangerine:
+        // ((math.degrees(math.atan2(dy, dx)) + 90 + 180/count) % 360) / (360/count)
+        double deg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        double normalized = (deg + 90.0 + (step / 2.0)) % 360.0;
+        if (normalized < 0) normalized += 360.0;
+
+        int index = (int)(normalized / step);
+        if (index >= count) index = count - 1;
+        return index;
     }
 }

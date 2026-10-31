@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -56,16 +58,16 @@ public class GlobalInputHook : IDisposable
 
     private readonly ExplorerService _explorerService;
     private readonly ImageConverter _imageConverter;
-    private readonly Action<string> _onConversionSuccess;
+    private readonly Action<IReadOnlyList<string>> _onConversionSuccess;
 
     private volatile bool _isRadialMenuOpen = false;
     private RadialMenuWindow? _currentRadialWindow = null;
-    private string? _currentFilePath = null;
+    private IReadOnlyList<string>? _currentFilePaths = null;
 
     public GlobalInputHook(
         ExplorerService explorerService,
         ImageConverter imageConverter,
-        Action<string> onConversionSuccess)
+        Action<IReadOnlyList<string>> onConversionSuccess)
     {
         _explorerService = explorerService;
         _imageConverter = imageConverter;
@@ -109,27 +111,26 @@ public class GlobalInputHook : IDisposable
                     var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
                     if (_explorerService.IsExplorerOrDesktopWindow(expPt, out _))
                     {
-                        // Give Explorer ~15ms to select the clicked file upon WM_RBUTTONDOWN
+                        // Give Explorer ~20ms to register focus on the clicked item
                         Task.Run(async () =>
                         {
                             try
                             {
                                 await Task.Delay(20);
-                                var filePath = _explorerService.GetTargetFilePath(expPt);
+                                var filePaths = _explorerService.GetTargetFilePaths(expPt);
 
-                                if (!string.IsNullOrEmpty(filePath) && _imageConverter.CanHandle(filePath))
+                                if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
                                 {
-                                    var options = _imageConverter.GetOptions(filePath);
+                                    var options = _imageConverter.GetOptions(filePaths);
                                     if (options.Count > 0)
                                     {
-                                        _currentFilePath = filePath;
+                                        _currentFilePaths = filePaths;
                                         _isRadialMenuOpen = true;
 
-                                        // Show radial menu on UI thread
                                         System.Windows.Application.Current.Dispatcher.Invoke(() =>
                                         {
                                             CloseRadialMenu();
-                                            _currentRadialWindow = new RadialMenuWindow(filePath, options, pt.x, pt.y);
+                                            _currentRadialWindow = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
                                             _currentRadialWindow.Show();
                                         });
                                     }
@@ -165,29 +166,32 @@ public class GlobalInputHook : IDisposable
                     // Execute chosen option on release
                     System.Windows.Application.Current.Dispatcher.Invoke(async () =>
                     {
-                        if (_currentRadialWindow != null && _currentFilePath != null)
+                        if (_currentRadialWindow != null && _currentFilePaths != null)
                         {
                             var selectedOption = _currentRadialWindow.GetSelectedOption();
                             var windowToClose = _currentRadialWindow;
-                            var sourceFile = _currentFilePath;
+                            var sourceFiles = _currentFilePaths;
                             _currentRadialWindow = null;
-                            _currentFilePath = null;
+                            _currentFilePaths = null;
 
                             if (selectedOption != null)
                             {
                                 windowToClose.ShowConvertingFeedback(selectedOption.TargetExtension);
-                                // Brief visual confirmation
-                                await Task.Delay(180);
+                                await Task.Delay(150);
                                 windowToClose.Close();
 
                                 try
                                 {
-                                    var createdPath = await _imageConverter.ConvertAsync(sourceFile, selectedOption.TargetExtension);
-                                    _onConversionSuccess?.Invoke(createdPath);
+                                    var createdPaths = await _imageConverter.ConvertBatchAsync(sourceFiles, selectedOption.Id);
+                                    _onConversionSuccess?.Invoke(createdPaths);
                                 }
                                 catch (Exception ex)
                                 {
-                                    MessageBox.Show($"Failed to convert file:\n{ex.Message}", "QuickConvert Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    System.Windows.MessageBox.Show(
+                                        $"Failed to convert file(s):\n{ex.Message}",
+                                        "Open Tangerine Error",
+                                        MessageBoxButton.OK,
+                                        MessageBoxImage.Error);
                                 }
                             }
                             else
@@ -197,7 +201,7 @@ public class GlobalInputHook : IDisposable
                         }
                     });
 
-                    // SWALLOW the WM_RBUTTONUP so Windows Explorer never opens the context menu
+                    // Swallow the WM_RBUTTONUP so Windows Explorer context menu doesn't show
                     return (IntPtr)1;
                 }
             }
@@ -218,7 +222,7 @@ public class GlobalInputHook : IDisposable
             _currentRadialWindow = null;
         }
         _isRadialMenuOpen = false;
-        _currentFilePath = null;
+        _currentFilePaths = null;
     }
 
     public void Dispose()

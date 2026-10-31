@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Media;
@@ -72,7 +73,7 @@ public class TrayIconManager : IDisposable
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    private const string AppName = "QuickConvert";
+    private const string AppName = "OpenTangerine";
     private const string StartupRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     private HwndSource? _hwndSource;
@@ -80,7 +81,7 @@ public class TrayIconManager : IDisposable
     private IntPtr _hIcon = IntPtr.Zero;
     private bool _isAdded = false;
 
-    public Action? OnRequestTestConversion { get; set; }
+    public Action? OnRequestOpenWindow { get; set; }
     public Action? OnRequestExit { get; set; }
 
     public TrayIconManager()
@@ -91,7 +92,7 @@ public class TrayIconManager : IDisposable
 
     private void CreateMessageWindow()
     {
-        var parameters = new HwndSourceParameters("QuickConvert_TrayListener")
+        var parameters = new HwndSourceParameters("OpenTangerine_TrayListener")
         {
             WindowStyle = 0,
             ExtendedWindowStyle = 0,
@@ -108,7 +109,7 @@ public class TrayIconManager : IDisposable
     {
         if (_hwndSource == null) return;
 
-        _hIcon = GenerateAppIcon();
+        _hIcon = GenerateTangerineIcon();
 
         _nid = new NOTIFYICONDATA
         {
@@ -118,36 +119,39 @@ public class TrayIconManager : IDisposable
             uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
             uCallbackMessage = WM_TRAYICON,
             hIcon = _hIcon,
-            szTip = "QuickConvert (Shift+Right-Click to convert)"
+            szTip = "Open Tangerine (Shift+Right-Click in Explorer)"
         };
 
         _isAdded = Shell_NotifyIcon(NIM_ADD, ref _nid);
     }
 
-    private IntPtr GenerateAppIcon()
+    private IntPtr GenerateTangerineIcon()
     {
-        // Generate an icon programmatically using WPF DrawingVisual
         int size = 32;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            // Background blue circle
+            // Citrus Tangerine Orange base circle
             dc.DrawEllipse(
-                new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                new SolidColorBrush(Color.FromRgb(255, 102, 25)),
                 null,
-                new System.Windows.Point(size / 2.0, size / 2.0),
-                size / 2.0 - 1,
-                size / 2.0 - 1);
+                new Point(size / 2.0, size / 2.0),
+                size / 2.0 - 1.5,
+                size / 2.0 - 1.5);
 
-            // Lightning / arrows symbol in white
-            var pen = new System.Windows.Media.Pen(System.Windows.Media.Brushes.White, 2.5);
-            dc.DrawLine(pen, new System.Windows.Point(8, 12), new System.Windows.Point(22, 12));
-            dc.DrawLine(pen, new System.Windows.Point(18, 8), new System.Windows.Point(22, 12));
-            dc.DrawLine(pen, new System.Windows.Point(18, 16), new System.Windows.Point(22, 12));
+            // Leaf / stem accent in green
+            var leafBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            dc.DrawEllipse(leafBrush, null, new Point(22, 9), 4, 2.5);
 
-            dc.DrawLine(pen, new System.Windows.Point(24, 20), new System.Windows.Point(10, 20));
-            dc.DrawLine(pen, new System.Windows.Point(14, 16), new System.Windows.Point(10, 20));
-            dc.DrawLine(pen, new System.Windows.Point(14, 24), new System.Windows.Point(10, 20));
+            // White wheel / conversion symbol
+            var pen = new Pen(Brushes.White, 2.4);
+            dc.DrawLine(pen, new Point(9, 13), new Point(23, 13));
+            dc.DrawLine(pen, new Point(19, 9), new Point(23, 13));
+            dc.DrawLine(pen, new Point(19, 17), new Point(23, 13));
+
+            dc.DrawLine(pen, new Point(23, 21), new Point(9, 21));
+            dc.DrawLine(pen, new Point(13, 17), new Point(9, 21));
+            dc.DrawLine(pen, new Point(13, 25), new Point(9, 21));
         }
 
         var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
@@ -174,7 +178,7 @@ public class TrayIconManager : IDisposable
             }
             else if (eventId == WM_LBUTTONDBLCLK)
             {
-                ShowQuickGuide();
+                OnRequestOpenWindow?.Invoke();
                 handled = true;
             }
         }
@@ -191,15 +195,23 @@ public class TrayIconManager : IDisposable
 
         var header = new MenuItem
         {
-            Header = "⚡ QuickConvert (Active)",
+            Header = "🍊 Open Tangerine (Active)",
             FontWeight = FontWeights.Bold,
             IsEnabled = false
         };
         menu.Items.Add(header);
 
+        var openWindowItem = new MenuItem
+        {
+            Header = "Open Tangerine Window...",
+            FontWeight = FontWeights.SemiBold
+        };
+        openWindowItem.Click += (s, e) => OnRequestOpenWindow?.Invoke();
+        menu.Items.Add(openWindowItem);
+
         var tip = new MenuItem
         {
-            Header = "Shift + Right-Click a file in Explorer",
+            Header = "Tip: Shift + Right-Click in Explorer",
             IsEnabled = false
         };
         menu.Items.Add(tip);
@@ -220,13 +232,6 @@ public class TrayIconManager : IDisposable
         };
         menu.Items.Add(startupItem);
 
-        var testItem = new MenuItem
-        {
-            Header = "Test Conversion with File..."
-        };
-        testItem.Click += (s, e) => OnRequestTestConversion?.Invoke();
-        menu.Items.Add(testItem);
-
         var guideItem = new MenuItem
         {
             Header = "How to Use / Help"
@@ -238,7 +243,7 @@ public class TrayIconManager : IDisposable
 
         var exitItem = new MenuItem
         {
-            Header = "Exit QuickConvert"
+            Header = "Exit Open Tangerine"
         };
         exitItem.Click += (s, e) => OnRequestExit?.Invoke();
         menu.Items.Add(exitItem);
@@ -246,20 +251,22 @@ public class TrayIconManager : IDisposable
         menu.IsOpen = true;
     }
 
-    public void NotifyConversion(string createdFilePath)
+    public void NotifyConversions(IReadOnlyList<string> createdFilePaths)
     {
         try
         {
             SystemSounds.Asterisk.Play();
 
-            if (_isAdded)
+            if (_isAdded && createdFilePaths.Count > 0)
             {
-                var fileName = Path.GetFileName(createdFilePath);
-                var dir = Path.GetDirectoryName(createdFilePath);
+                string title = createdFilePaths.Count == 1 ? "File Converted" : $"{createdFilePaths.Count} Files Converted";
+                string details = createdFilePaths.Count == 1
+                    ? $"Created: {Path.GetFileName(createdFilePaths[0])}"
+                    : $"Created {createdFilePaths.Count} files in {Path.GetDirectoryName(createdFilePaths[0])}";
 
                 _nid.uFlags = NIF_INFO;
-                _nid.szInfoTitle = "File Converted Successfully";
-                _nid.szInfo = $"Created: {fileName}\nIn: {dir}";
+                _nid.szInfoTitle = title;
+                _nid.szInfo = details;
                 _nid.dwInfoFlags = NIIF_INFO;
 
                 Shell_NotifyIcon(NIM_MODIFY, ref _nid);
@@ -271,14 +278,15 @@ public class TrayIconManager : IDisposable
     private void ShowQuickGuide()
     {
         MessageBox.Show(
-            "QuickConvert is running in the background!\n\n" +
-            "How to use:\n" +
-            "1. Hold SHIFT and RIGHT-CLICK on any image (e.g. WEBP, PNG, JPG) in File Explorer or Desktop.\n" +
-            "2. Keep holding right-click as the radial wheel appears at your cursor.\n" +
-            "3. Move your cursor to hover over the desired format (e.g. PNG or JPEG).\n" +
-            "4. RELEASE right-click to instantly create a new converted copy in the same directory!\n\n" +
-            "To cancel: simply release right-click inside the center circle.",
-            "QuickConvert - Quick Guide",
+            "Open Tangerine is active in the background!\n\n" +
+            "How to convert:\n" +
+            "1. In File Explorer or Desktop, hold SHIFT and RIGHT-CLICK any file(s).\n" +
+            "2. Keep holding right-click: The frosted glass wheel appears centered at your cursor.\n" +
+            "3. Hover your cursor over the desired format (PNG, JPEG, WEBP, PDF, etc.).\n" +
+            "4. RELEASE right-click to instantly create converted copies in the same directory!\n\n" +
+            "To cancel at any time: release inside the center hub circle.\n" +
+            "Double-click this tray icon anytime to open the Open Tangerine desktop batch window.",
+            "Open Tangerine - Guide",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }

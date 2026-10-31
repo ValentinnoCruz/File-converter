@@ -1,31 +1,52 @@
-# QuickConvert (Radial File Converter)
+# Open Tangerine (Windows Native Edition)
 
-A lightweight background Windows application that allows you to instantly convert files from File Explorer via a gesture-driven **Radial Wheel**.
+A high-performance, native Windows clone of **[Open Tangerine](https://github.com/sintaxerrorpvtltd/Open-Tangerine)**. Runs completely offline in the background, featuring the signature **frosted glass radial wheel** with vivid citrus glowing highlights, multi-file Explorer integration, and a companion batch drop window.
+
+---
+
+## 🍊 Key Highlights
+
+- **Instant In-Explorer Conversion**: Select one or multiple files in Windows File Explorer or Desktop, hold `Shift`, and **Right-Click**. The Tangerine frosted glass wheel appears centered on your cursor. Release on a format slice to instantly convert all selected items in-place.
+- **Iconic Frosted Glass Radial Wheel**:
+  - Pearly white gradient rim with soft 3D shadow.
+  - Floating rounded glass segments that illuminate with a vivid Tangerine citrus glow (`#FF6619` / `#FFB36B` / `#EB4F0C`).
+  - Center hub with pill capsule displaying active format or `DROP`/`CANCEL`.
+  - Floating status pill underneath with dynamic conversion descriptions.
+- **Rich Format Engine**:
+  - **Images**: PNG, JPEG, WEBP, BMP, ICO.
+  - **Image → PDF**: Converts single or batches of images into high-resolution PDF documents.
+  - **Subtitles**: Bidirectional SRT ↔ WebVTT conversion.
+  - **Audio/Video**: Seamless conversion via installed FFmpeg (MP4, WEBM, MP3, WAV, FLAC, OGG).
+- **Desktop Companion Window**:
+  - Drag-and-drop batch drop area with Tangerine orange glow on file hover.
+  - Embedded interactive glass wheel synced with format selector.
+  - File queue with per-file status and output folder options.
+- **Ultra Lightweight & Fast**:
+  - Native .NET 9 + SkiaSharp GPU/CPU engine (~25–35MB memory footprint).
+  - Instant 15ms activation via low-level Win32 / Shell COM automation (no slow PowerShell sub-processes).
+  - Single-instance system tray daemon with "Start with Windows" support and toast notifications.
 
 ---
 
 ## ⚡ How It Works
 
-1. **Hold `Shift` and Right-Click** on any supported file (e.g., `.webp`, `.png`, `.jpg`) in Windows File Explorer or Desktop.
-2. **Hold down the Right Mouse Button**: A radial wheel smoothly pops up centered on your cursor, displaying conversion options tailored to that file type.
-   - For example, Shift+Right-Clicking a `.webp` file displays **PNG** and **JPEG** slices.
-3. **Hover over your desired format slice** (the slice highlights in real time with haptic visual glow).
-4. **Release Right-Click**: A new copy of that file is immediately created in the exact same directory in the selected format!
-5. **To Cancel**: Simply release inside the center circle ("Cancel" hub).
+### In File Explorer:
+```
+[Select File(s)] ──> [Hold Shift] + [Hold Right-Click] ──> [Frosted Glass Wheel Appears]
+                                                                     │
+                                                                     ▼
+                                                     [Hover format (e.g. PNG, PDF)]
+                                                                     │
+                                                                     ▼
+                                                           [Release Right-Click]
+                                                                     │
+                                                                     ▼
+                                             [Converted file(s) saved in same folder]
+```
 
----
-
-## 🚀 Key Features
-
-- **Lightweight Background Process**: Sits quietly in the Windows System Tray with ~30MB memory footprint.
-- **Zero Explorer Intrusions**: Does not modify Windows Shell registry keys or pollute the standard Windows context menu.
-- **Hardware-Accelerated Radial UI**: Modern WPF Fluent dark-mode translucent wheel with responsive mouse tracking.
-- **Fast, High-Fidelity Image Engine**: Powered by Google's open-source `SkiaSharp` engine (native WebP, PNG, JPEG, BMP, ICO support with automatic transparency handling).
-- **Collision Avoidance**: If `photo.png` already exists, automatically saves as `photo (1).png`.
-- **System Tray Management**:
-  - Right-click tray icon to toggle "Start with Windows" (auto-run on boot).
-  - "Test Conversion with File..." option to test the wheel anytime without Explorer.
-  - Toast / balloon notifications upon successful conversion.
+### In Desktop Companion Window:
+- Double-click the orange citrus icon in your system tray or run with `--window`.
+- Drag and drop files directly onto the window, pick your desired output on the wheel or dropdown, and click **Convert files**.
 
 ---
 
@@ -34,36 +55,37 @@ A lightweight background Windows application that allows you to instantly conver
 ```
 ├── Core/
 │   ├── Models/
-│   │   └── ConversionOption.cs     # Conversion target metadata & color accents
+│   │   └── ConversionOption.cs     # Format definitions and Tangerine styling
 │   └── Services/
-│       ├── IFileConverter.cs       # Extensible converter interface
-│       ├── ImageConverter.cs       # SkiaSharp image transcode (WebP, PNG, JPG, etc.)
-│       ├── ExplorerService.cs      # File Explorer & Desktop selection detection
+│       ├── IFileConverter.cs       # Extensible single & batch converter contract
+│       ├── ImageConverter.cs       # SkiaSharp image transcode, PDF export & FFmpeg bridge
+│       ├── ExplorerService.cs      # Multi-selection File Explorer & Desktop resolver
 │       └── GlobalInputHook.cs      # Low-level WH_MOUSE_LL hook for Shift+Right-Click
 ├── UI/
-│   ├── RadialGeometryHelper.cs     # Dynamic pie-slice vector geometry calculation
-│   ├── RadialMenuWindow.xaml       # Translucent WPF radial wheel UI
-│   └── TrayIconManager.cs          # Native Windows notification area (System Tray)
-├── RadialConvert.Tests/            # Comprehensive unit test suite
-├── App.xaml / App.xaml.cs          # Single-instance lifecycle management
+│   ├── RadialGeometryHelper.cs     # Sector geometry math matching Open Tangerine
+│   ├── RadialMenuWindow.xaml       # Translucent frosted glass wheel window
+│   ├── MainWindow.xaml             # Tangerine companion desktop batch window
+│   └── TrayIconManager.cs          # Native notification area tray manager
+├── RadialConvert.Tests/            # Comprehensive unit test suite (9 passing tests)
+├── App.xaml / App.xaml.cs          # Application startup & lifecycle
 └── RadialConvert.sln
 ```
 
 ---
 
-## 🧪 Running & Testing
+## 🧪 Testing & Execution
 
-### Run Tests:
+### Run Automated Tests:
 ```powershell
 dotnet test
 ```
 
-### Run Application:
+### Run the App in Background:
 ```powershell
 dotnet run
 ```
 
-### Build Release Executable:
+### Open the Desktop Companion Window:
 ```powershell
-dotnet publish -c Release -r win-x64 --no-self-contained -o ./publish
+dotnet run -- --window
 ```

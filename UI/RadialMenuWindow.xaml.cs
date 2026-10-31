@@ -4,40 +4,90 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using RadialConvert.Core.Models;
 using WpfPath = System.Windows.Shapes.Path;
+using Point = System.Windows.Point;
 
 namespace RadialConvert.UI;
 
 public partial class RadialMenuWindow : Window
 {
-    private readonly string _sourceFilePath;
+    private readonly IReadOnlyList<string> _sourceFilePaths;
     private readonly IReadOnlyList<ConversionOption> _options;
-    private readonly double _centerCoord = 180.0;
-    private readonly double _innerRadius = 48.0;
-    private readonly double _outerRadius = 140.0;
+    private readonly Point _centerPoint = new Point(190.0, 190.0);
     private double _originScreenX;
     private double _originScreenY;
     private int _hoveredIndex = -1;
 
     private readonly List<WpfPath> _slicePaths = new();
-    private readonly List<Border> _sliceLabels = new();
+    private readonly List<TextBlock> _sliceLabels = new();
 
-    public RadialMenuWindow(string sourceFilePath, IReadOnlyList<ConversionOption> options, double screenX, double screenY)
+    private readonly LinearGradientBrush _normalSliceBrush;
+    private readonly LinearGradientBrush _activeTangerineBrush;
+    private readonly SolidColorBrush _normalStrokeBrush;
+    private readonly SolidColorBrush _activeStrokeBrush;
+    private readonly SolidColorBrush _normalTextBrush;
+    private readonly SolidColorBrush _activeTextBrush;
+
+    public RadialMenuWindow(
+        IReadOnlyList<string> sourceFilePaths,
+        IReadOnlyList<ConversionOption> options,
+        double screenX,
+        double screenY)
     {
         InitializeComponent();
 
-        _sourceFilePath = sourceFilePath;
+        _sourceFilePaths = sourceFilePaths;
         _options = options;
         _originScreenX = screenX;
         _originScreenY = screenY;
 
-        FileNameText.Text = System.IO.Path.GetFileName(sourceFilePath);
+        // Pre-create high performance frozen brushes
+        _normalSliceBrush = new LinearGradientBrush(
+            Color.FromArgb(0xCD, 0xFF, 0xFF, 0xFF),
+            Color.FromArgb(0xC8, 0xB7, 0xCE, 0xDC),
+            new Point(0.1, 0.05),
+            new Point(0.9, 0.95));
+        _normalSliceBrush.GradientStops.Insert(1, new GradientStop(Color.FromArgb(0xB0, 0xE0, 0xED, 0xF3), 0.5));
+        _normalSliceBrush.Freeze();
 
+        _activeTangerineBrush = new LinearGradientBrush(
+            Color.FromArgb(0xF8, 0xFF, 0xB3, 0x6B), // Peach Orange
+            Color.FromArgb(0xF8, 0xEB, 0x4F, 0x0C), // Deep Red-Citrus
+            new Point(0.1, 0.05),
+            new Point(0.9, 0.95));
+        _activeTangerineBrush.GradientStops.Insert(1, new GradientStop(Color.FromArgb(0xF0, 0xFF, 0x66, 0x19), 0.5)); // Electric Tangerine
+        _activeTangerineBrush.Freeze();
+
+        _normalStrokeBrush = new SolidColorBrush(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF));
+        _normalStrokeBrush.Freeze();
+
+        _activeStrokeBrush = new SolidColorBrush(Colors.White);
+        _activeStrokeBrush.Freeze();
+
+        _normalTextBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x33, 0x40));
+        _normalTextBrush.Freeze();
+
+        _activeTextBrush = new SolidColorBrush(Colors.White);
+        _activeTextBrush.Freeze();
+
+        UpdateTopBadge();
         PositionWindow(screenX, screenY);
         BuildSlices();
+    }
+
+    private void UpdateTopBadge()
+    {
+        if (_sourceFilePaths.Count == 1)
+        {
+            FileNameText.Text = System.IO.Path.GetFileName(_sourceFilePaths[0]);
+        }
+        else
+        {
+            FileNameText.Text = $"{_sourceFilePaths.Count} files selected";
+        }
     }
 
     public void PositionWindow(double screenX, double screenY)
@@ -45,125 +95,73 @@ public partial class RadialMenuWindow : Window
         _originScreenX = screenX;
         _originScreenY = screenY;
 
-        // Position window centered at mouse point
-        Left = screenX - (Width / 2.0);
-        Top = screenY - (Height / 2.0);
+        Left = screenX - 190.0;
+        Top = screenY - 190.0;
     }
 
     private void BuildSlices()
     {
-        SlicesCanvas.Children.Clear();
+        SlicesContainer.Children.Clear();
         _slicePaths.Clear();
         _sliceLabels.Clear();
 
         if (_options == null || _options.Count == 0) return;
 
         int count = _options.Count;
-        double sliceSpan = 360.0 / count;
-        var centerPoint = new Point(_centerCoord, _centerCoord);
 
         for (int i = 0; i < count; i++)
         {
             var opt = _options[i];
-            double startAngle = i * sliceSpan;
-            double endAngle = (i + 1) * sliceSpan;
 
-            // Geometry for slice
-            var geom = RadialGeometryHelper.CreatePieSliceGeometry(
-                centerPoint,
-                _innerRadius,
-                _outerRadius,
-                startAngle,
-                endAngle);
+            // 1. Slice geometry (Tangerine rounded glass sector)
+            var geom = RadialGeometryHelper.CreateRoundedGlassSegmentGeometry(_centerPoint, i, count);
 
             var path = new WpfPath
             {
                 Data = geom,
-                Fill = new SolidColorBrush(Color.FromArgb(0xEA, 0x1E, 0x1E, 0x28)),
-                Stroke = new SolidColorBrush(Color.FromArgb(0x60, 0x55, 0x55, 0x6E)),
-                StrokeThickness = 1.5,
+                Fill = _normalSliceBrush,
+                Stroke = _normalStrokeBrush,
+                StrokeThickness = 1.1,
                 Tag = i
             };
 
-            SlicesCanvas.Children.Add(path);
+            SlicesContainer.Children.Add(path);
             _slicePaths.Add(path);
 
-            // Label container positioned inside slice
-            double midRadius = (_innerRadius + _outerRadius) / 2.0;
-            Point labelPos = RadialGeometryHelper.GetLabelPosition(centerPoint, midRadius, startAngle, endAngle);
+            // 2. Slice text label
+            Point labelPos = RadialGeometryHelper.GetLabelPosition(_centerPoint, i, count, radius: 123.0);
 
-            var labelBorder = CreateSliceLabel(opt);
-            Canvas.SetLeft(labelBorder, labelPos.X - 45);
-            Canvas.SetTop(labelBorder, labelPos.Y - 24);
+            var label = new TextBlock
+            {
+                Text = opt.DisplayName,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = _normalTextBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
+            };
 
-            SlicesCanvas.Children.Add(labelBorder);
-            _sliceLabels.Add(labelBorder);
+            // Measure label to center it on labelPos
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double w = Math.Max(40, label.DesiredSize.Width);
+            double h = Math.Max(20, label.DesiredSize.Height);
+
+            Canvas.SetLeft(label, labelPos.X - (w / 2.0));
+            Canvas.SetTop(label, labelPos.Y - (h / 2.0));
+
+            SlicesContainer.Children.Add(label);
+            _sliceLabels.Add(label);
         }
-    }
-
-    private Border CreateSliceLabel(ConversionOption opt)
-    {
-        var border = new Border
-        {
-            Width = 90,
-            Height = 48,
-            Background = Brushes.Transparent,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-
-        var sp = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var title = new TextBlock
-        {
-            Text = opt.DisplayName,
-            FontSize = 15,
-            FontWeight = FontWeights.Bold,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-
-        var sub = new TextBlock
-        {
-            Text = opt.Description,
-            FontSize = 9.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 1, 0, 0),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 86
-        };
-
-        sp.Children.Add(title);
-        sp.Children.Add(sub);
-        border.Child = sp;
-
-        return border;
     }
 
     public void UpdateCursor(double screenX, double screenY)
     {
-        double dx = screenX - _originScreenX;
-        double dy = screenY - _originScreenY;
-        double dist = Math.Sqrt(dx * dx + dy * dy);
+        double localX = screenX - Left;
+        double localY = screenY - Top;
+        var localPoint = new Point(localX, localY);
 
-        int newHoveredIndex = -1;
-
-        if (dist > _innerRadius && _options.Count > 0)
-        {
-            // Angle from 12 o'clock (0 to 360 deg clockwise)
-            double angle = (Math.Atan2(dy, dx) * 180.0 / Math.PI) + 90.0;
-            if (angle < 0) angle += 360.0;
-
-            double sliceSpan = 360.0 / _options.Count;
-            newHoveredIndex = (int)(angle / sliceSpan);
-            if (newHoveredIndex >= _options.Count) newHoveredIndex = _options.Count - 1;
-        }
+        int newHoveredIndex = RadialGeometryHelper.GetSectorIndex(localPoint, _centerPoint, _options.Count);
 
         if (newHoveredIndex != _hoveredIndex)
         {
@@ -174,55 +172,48 @@ public partial class RadialMenuWindow : Window
 
     private void HighlightHoveredSlice(int index)
     {
+        string countText = _sourceFilePaths.Count > 1 ? $"{_sourceFilePaths.Count} files" : "file";
+
         for (int i = 0; i < _slicePaths.Count; i++)
         {
             var path = _slicePaths[i];
             var label = _sliceLabels[i];
-            var opt = _options[i];
 
             if (i == index)
             {
-                // Hovered styling
-                Color accentColor = (Color)ColorConverter.ConvertFromString(opt.AccentColor);
-                path.Fill = new SolidColorBrush(Color.FromArgb(0xDF, accentColor.R, accentColor.G, accentColor.B));
-                path.Stroke = Brushes.White;
-                path.StrokeThickness = 2.5;
+                // Active Tangerine Styling
+                path.Fill = _activeTangerineBrush;
+                path.Stroke = _activeStrokeBrush;
+                path.StrokeThickness = 1.8;
 
-                if (label.Child is StackPanel sp && sp.Children.Count >= 2)
-                {
-                    if (sp.Children[0] is TextBlock title) title.Foreground = Brushes.White;
-                    if (sp.Children[1] is TextBlock sub) sub.Foreground = new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xFF));
-                }
+                label.Foreground = _activeTextBrush;
+                label.Effect = (DropShadowEffect)FindResource("TextGlow");
             }
             else
             {
-                // Normal styling
-                path.Fill = new SolidColorBrush(Color.FromArgb(0xEA, 0x1E, 0x1E, 0x28));
-                path.Stroke = new SolidColorBrush(Color.FromArgb(0x60, 0x55, 0x55, 0x6E));
-                path.StrokeThickness = 1.5;
+                // Normal Glass Styling
+                path.Fill = _normalSliceBrush;
+                path.Stroke = _normalStrokeBrush;
+                path.StrokeThickness = 1.1;
 
-                if (label.Child is StackPanel sp && sp.Children.Count >= 2)
-                {
-                    if (sp.Children[0] is TextBlock title) title.Foreground = Brushes.White;
-                    if (sp.Children[1] is TextBlock sub) sub.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
-                }
+                label.Foreground = _normalTextBrush;
+                label.Effect = null;
             }
         }
 
-        // Center cancel hub feedback
-        if (index == -1)
+        // Update Hub & Caption
+        if (index >= 0 && index < _options.Count)
         {
-            CenterEllipse.Fill = new SolidColorBrush(Color.FromRgb(0x32, 0x20, 0x26)); // Subtle red tint
-            CenterEllipse.Stroke = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)); // Red highlight
-            CenterIcon.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
-            CenterText.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+            var opt = _options[index];
+            HubText.Text = opt.DisplayName;
+            HubText.Foreground = new SolidColorBrush(Color.FromRgb(0xEB, 0x4F, 0x0C));
+            CaptionText.Text = $"Convert {countText} to {opt.DisplayName}";
         }
         else
         {
-            CenterEllipse.Fill = new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x24));
-            CenterEllipse.Stroke = new SolidColorBrush(Color.FromRgb(0x38, 0x38, 0x4A));
-            CenterIcon.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
-            CenterText.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
+            HubText.Text = "DROP";
+            HubText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x3D, 0x4A));
+            CaptionText.Text = "Release in center to cancel";
         }
     }
 
@@ -237,7 +228,8 @@ public partial class RadialMenuWindow : Window
 
     public void ShowConvertingFeedback(string targetExt)
     {
-        StatusText.Text = $"Converting to {targetExt.TrimStart('.').ToUpper()}...";
-        StatusBadge.Visibility = Visibility.Visible;
+        string countText = _sourceFilePaths.Count > 1 ? $"{_sourceFilePaths.Count} files" : "file";
+        CaptionText.Text = $"Converting {countText} to {targetExt.TrimStart('.').ToUpper()}...";
+        HubText.Text = "DONE";
     }
 }

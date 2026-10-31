@@ -1,8 +1,8 @@
 <Window x:Class="RadialConvert.UI.RadialMenuWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="QuickConvert Wheel"
-        Height="360" Width="360"
+        Title="Open Tangerine Glass Wheel"
+        Height="430" Width="380"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -10,85 +10,113 @@
         ShowInTaskbar="False"
         ShowActivated="True"
         ResizeMode="NoResize">
-    
+
     <Window.Resources>
-        <!-- Smooth drop shadow effect -->
-        <DropShadowEffect x:Key="WheelShadow"
-                          BlurRadius="28"
+        <!-- Soft realistic glass shadow -->
+        <DropShadowEffect x:Key="GlassShadow"
+                          BlurRadius="24"
                           ShadowDepth="4"
                           Direction="270"
-                          Color="#000000"
-                          Opacity="0.65" />
+                          Color="#081824"
+                          Opacity="0.45" />
+
+        <DropShadowEffect x:Key="TextGlow"
+                          BlurRadius="4"
+                          ShadowDepth="1"
+                          Direction="270"
+                          Color="#7A2200"
+                          Opacity="0.6" />
     </Window.Resources>
 
-    <Grid x:Name="RootGrid" Width="360" Height="360">
-        <!-- Wheel Container -->
-        <Canvas x:Name="SlicesCanvas" Width="360" Height="360" Effect="{StaticResource WheelShadow}">
-            <!-- Slices added dynamically in code-behind -->
+    <Grid x:Name="RootGrid" Width="380" Height="430">
+        <!-- Wheel Container (380x380) -->
+        <Canvas x:Name="WheelCanvas" Width="380" Height="380" HorizontalAlignment="Center" VerticalAlignment="Top" Effect="{StaticResource GlassShadow}">
+            <!-- Pearly Rim Ellipse -->
+            <Ellipse x:Name="PearlyRim" Width="366" Height="366" Canvas.Left="7" Canvas.Top="7" StrokeThickness="1">
+                <Ellipse.Fill>
+                    <LinearGradientBrush StartPoint="0.05,0.01" EndPoint="0.95,0.99">
+                        <GradientStop Color="#AAF8FDFF" Offset="0.0" />
+                        <GradientStop Color="#55A1B8C6" Offset="0.55" />
+                        <GradientStop Color="#85F5FAFF" Offset="1.0" />
+                    </LinearGradientBrush>
+                </Ellipse.Fill>
+                <Ellipse.Stroke>
+                    <SolidColorBrush Color="#66FFFFFF" />
+                </Ellipse.Stroke>
+            </Ellipse>
+
+            <!-- Slices added dynamically -->
+            <Canvas x:Name="SlicesContainer" Width="380" Height="380" />
+
+            <!-- Center Glass Hub (128x128 at 126,126) -->
+            <Ellipse x:Name="CenterHub" Width="128" Height="128" Canvas.Left="126" Canvas.Top="126" StrokeThickness="1">
+                <Ellipse.Fill>
+                    <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.45,0.4" RadiusX="0.55" RadiusY="0.55">
+                        <GradientStop Color="#F8FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#C8D9EAF3" Offset="1.0" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+                <Ellipse.Stroke>
+                    <SolidColorBrush Color="#D0FFFFFF" />
+                </Ellipse.Stroke>
+            </Ellipse>
+
+            <!-- Inner Hub Pill (98x42 at 141, 169) -->
+            <Border x:Name="HubPill"
+                    Width="98" Height="42"
+                    Canvas.Left="141" Canvas.Top="169"
+                    CornerRadius="21"
+                    Background="#A5FFFFFF"
+                    BorderBrush="#D5FFFFFF"
+                    BorderThickness="1">
+                <TextBlock x:Name="HubText"
+                           Text="DROP"
+                           FontSize="12"
+                           FontWeight="Bold"
+                           Foreground="#263D4A"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
         </Canvas>
 
-        <!-- Center Hub (Neutral / Cancel Zone) -->
-        <Grid x:Name="CenterHub"
-              Width="96" Height="96"
-              HorizontalAlignment="Center"
-              VerticalAlignment="Center">
-            
-            <Ellipse x:Name="CenterEllipse"
-                     Fill="#1C1C24"
-                     Stroke="#38384A"
-                     StrokeThickness="2" />
-
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock x:Name="CenterIcon"
-                           Text="✕"
-                           FontSize="18"
-                           FontWeight="Bold"
-                           Foreground="#9CA3AF"
-                           HorizontalAlignment="Center" />
-                <TextBlock x:Name="CenterText"
-                           Text="Cancel"
-                           FontSize="11"
-                           FontWeight="SemiBold"
-                           Foreground="#9CA3AF"
-                           HorizontalAlignment="Center"
-                           Margin="0,2,0,0" />
-            </StackPanel>
-        </Grid>
-
-        <!-- Top Tooltip / Info Badge (Source File) -->
+        <!-- Top Source File / Selection Pill -->
         <Border HorizontalAlignment="Center"
                 VerticalAlignment="Top"
-                Margin="0,8,0,0"
-                Background="#D916161E"
-                BorderBrush="#38384A"
+                Margin="0,10,0,0"
+                Background="#DDF6FAFD"
+                BorderBrush="#90FFFFFF"
                 BorderThickness="1"
-                CornerRadius="12"
-                Padding="12,5"
-                Effect="{StaticResource WheelShadow}">
+                CornerRadius="13"
+                Padding="12,4"
+                Effect="{StaticResource GlassShadow}">
             <TextBlock x:Name="FileNameText"
                        Text="file.webp"
                        FontSize="11"
-                       FontWeight="Medium"
-                       Foreground="#E2E8F0"
-                       MaxWidth="260"
+                       FontWeight="SemiBold"
+                       Foreground="#28404E"
+                       MaxWidth="280"
                        TextTrimming="CharacterEllipsis"
-                       HorizontalAlignment="Center"/>
+                       HorizontalAlignment="Center" />
         </Border>
 
-        <!-- Status Notification Overlay (e.g. "Converting...") -->
-        <Border x:Name="StatusBadge"
+        <!-- Floating Caption Pill below the wheel (at 55, 385, size 270x32) -->
+        <Border x:Name="CaptionPill"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Bottom"
                 Margin="0,0,0,10"
-                Background="#E610B981"
-                CornerRadius="10"
-                Padding="14,6"
-                Visibility="Collapsed">
-            <TextBlock x:Name="StatusText"
-                       Text="Converting to PNG..."
-                       FontSize="12"
+                Width="270" Height="32"
+                CornerRadius="16"
+                Background="#E8EFF8FD"
+                BorderBrush="#B0FFFFFF"
+                BorderThickness="1"
+                Effect="{StaticResource GlassShadow}">
+            <TextBlock x:Name="CaptionText"
+                       Text="Drag onto format or release"
+                       FontSize="11.5"
                        FontWeight="SemiBold"
-                       Foreground="#FFFFFF" />
+                       Foreground="#28404E"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
         </Border>
     </Grid>
 </Window>
