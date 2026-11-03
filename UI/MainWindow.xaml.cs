@@ -21,7 +21,8 @@ public partial class MainWindow : Window
 {
     private readonly ImageConverter _converter;
     private readonly ObservableCollection<string> _fileList = new();
-    private readonly List<string> _standardFormats = new() { "PNG", "JPEG", "WEBP", "BMP", "ICO", "PDF" };
+    private static readonly string[] DefaultFormats = { "PNG", "JPEG", "WEBP", "BMP", "ICO", "PDF" };
+    private readonly List<string> _standardFormats = new();
     private string? _customOutputFolder = null;
     private int _selectedWheelIndex = 0;
 
@@ -34,10 +35,7 @@ public partial class MainWindow : Window
         _converter = converter;
 
         FilesListBox.ItemsSource = _fileList;
-        OperationsCombo.ItemsSource = _standardFormats;
-        OperationsCombo.SelectedIndex = 0;
-
-        BuildEmbeddedWheel();
+        RefreshAvailableFormats();
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -55,6 +53,9 @@ public partial class MainWindow : Window
 
         var center = new Point(180, 180);
         int count = _standardFormats.Count;
+        if (count == 0) return;
+
+        if (_selectedWheelIndex >= count) _selectedWheelIndex = 0;
 
         for (int i = 0; i < count; i++)
         {
@@ -103,6 +104,27 @@ public partial class MainWindow : Window
         }
 
         EmbeddedHubText.Text = _standardFormats[_selectedWheelIndex];
+    }
+
+    private void RefreshAvailableFormats()
+    {
+        var options = _fileList.Count > 0 ? _converter.GetOptions(_fileList.ToList()) : null;
+
+        _standardFormats.Clear();
+        if (options != null && options.Count > 0)
+        {
+            _standardFormats.AddRange(options.Select(o => o.DisplayName));
+        }
+        else
+        {
+            _standardFormats.AddRange(DefaultFormats);
+        }
+
+        OperationsCombo.ItemsSource = null;
+        OperationsCombo.ItemsSource = _standardFormats;
+        _selectedWheelIndex = 0;
+        OperationsCombo.SelectedIndex = 0;
+        BuildEmbeddedWheel();
     }
 
     private void UpdateEmbeddedWheelSelection()
@@ -167,6 +189,7 @@ public partial class MainWindow : Window
             }
         }
 
+        RefreshAvailableFormats();
         UpdateListVisibility();
     }
 
@@ -195,6 +218,7 @@ public partial class MainWindow : Window
     private void ClearFiles_Click(object sender, RoutedEventArgs e)
     {
         _fileList.Clear();
+        RefreshAvailableFormats();
         UpdateListVisibility();
         StatusMessage.Text = "";
         JobProgressBar.Visibility = Visibility.Collapsed;

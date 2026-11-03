@@ -24,6 +24,7 @@ public class ImageConverter : IFileConverter
         ".mp4", ".mov", ".m4v", ".mkv", ".webm", ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"
     };
 
+    private readonly OneNoteConverter _oneNoteConverter = new();
     private string? _ffmpegPath;
 
     public ImageConverter()
@@ -85,6 +86,7 @@ public class ImageConverter : IFileConverter
         if (SupportedImageExtensions.Contains(ext)) return true;
         if (string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(ext, ".srt", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".vtt", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(ext, ".one", StringComparison.OrdinalIgnoreCase) && _oneNoteConverter.CanHandle(filePath)) return true;
         if (SupportedMediaExtensions.Contains(ext) && IsFfmpegAvailable) return true;
         return false;
     }
@@ -189,6 +191,11 @@ public class ImageConverter : IFileConverter
             options.Add(new ConversionOption { Id = "FLAC", DisplayName = "FLAC", Description = "Lossless Audio", TargetExtension = ".flac" });
             options.Add(new ConversionOption { Id = "OGG", DisplayName = "OGG", Description = "Vorbis Audio", TargetExtension = ".ogg" });
         }
+        // Case 4: Microsoft OneNote (.one) files
+        else if (suffixes.Contains(".one") && suffixes.Count == 1)
+        {
+            return _oneNoteConverter.GetOptions(filePaths[0]);
+        }
 
         return options;
     }
@@ -247,6 +254,12 @@ public class ImageConverter : IFileConverter
             if (SupportedMediaExtensions.Contains(srcExt) && IsFfmpegAvailable)
             {
                 return ConvertMediaWithFfmpeg(sourcePath, directory, fileNameWithoutExt, normalizedTarget);
+            }
+
+            // Microsoft OneNote conversion (.one -> PDF / DOCX / XPS)
+            if (srcExt == ".one")
+            {
+                return _oneNoteConverter.ConvertAsync(sourcePath, normalizedTarget, cancellationToken).GetAwaiter().GetResult();
             }
 
             // Image to PDF conversion

@@ -71,8 +71,8 @@ public class ImageConverterTests
         Assert.IsTrue(converter.CanHandle("test.gif"));
         Assert.IsTrue(converter.CanHandle("sub.srt"));
         Assert.IsTrue(converter.CanHandle("sub.vtt"));
+        Assert.IsTrue(converter.CanHandle("notes.one"));
 
-        Assert.IsFalse(converter.CanHandle("document.docx"));
         Assert.IsFalse(converter.CanHandle("archive.zip"));
         Assert.IsFalse(converter.CanHandle(""));
     }
@@ -220,5 +220,53 @@ public class ImageConverterTests
         var hubPoint = new Point(190, 190);
         int hubSector = RadialGeometryHelper.GetSectorIndex(hubPoint, center, 6);
         Assert.AreEqual(-1, hubSector);
+    }
+
+    [TestMethod]
+    public void OneNote_CanHandleAndGetOptions()
+    {
+        var converter = new ImageConverter();
+        Assert.IsTrue(converter.CanHandle("meeting.one"));
+
+        var options = converter.GetOptions(new[] { "meeting.one" });
+        Assert.IsNotNull(options);
+        Assert.IsTrue(options.Any(o => o.Id == "PDF"));
+        Assert.IsTrue(options.Any(o => o.Id == "DOCX"));
+        Assert.IsTrue(options.Any(o => o.Id == "XPS"));
+    }
+
+    [TestMethod]
+    public async Task OneNote_ConvertAsync_BulkPostTcToPdfAndDocx()
+    {
+        string samplePath = @"C:\Users\Didis\Downloads\Bulk POST TC's via CSV.one";
+        if (!File.Exists(samplePath))
+        {
+            Assert.Inconclusive("Sample OneNote test file not found in Downloads.");
+            return;
+        }
+
+        // Copy to isolated test directory
+        string copiedPath = Path.Combine(_testDir, "Bulk POST TC's via CSV.one");
+        File.Copy(samplePath, copiedPath);
+
+        var converter = new ImageConverter();
+
+        // 1. Convert to PDF
+        string createdPdf = await converter.ConvertAsync(copiedPath, "pdf");
+        Assert.IsTrue(File.Exists(createdPdf), "PDF should be generated");
+        Assert.AreEqual(".pdf", Path.GetExtension(createdPdf).ToLowerInvariant());
+        var pdfBytes = File.ReadAllBytes(createdPdf);
+        Assert.IsTrue(pdfBytes.Length > 100_000, "PDF should have content (>100KB)");
+        string pdfHeader = System.Text.Encoding.ASCII.GetString(pdfBytes.Take(5).ToArray());
+        Assert.AreEqual("%PDF-", pdfHeader);
+
+        // 2. Convert to DOCX
+        string createdDocx = await converter.ConvertAsync(copiedPath, "docx");
+        Assert.IsTrue(File.Exists(createdDocx), "DOCX should be generated");
+        Assert.AreEqual(".docx", Path.GetExtension(createdDocx).ToLowerInvariant());
+        var docxBytes = File.ReadAllBytes(createdDocx);
+        Assert.IsTrue(docxBytes.Length > 50_000, "DOCX should have content (>50KB)");
+        string docxHeader = System.Text.Encoding.ASCII.GetString(docxBytes.Take(2).ToArray());
+        Assert.AreEqual("PK", docxHeader, "DOCX file must be a valid Office Open XML ZIP package");
     }
 }

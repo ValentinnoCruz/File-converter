@@ -162,7 +162,7 @@
                                    Foreground="#CBD5E1"
                                    HorizontalAlignment="Center"
                                    Margin="0,8,0,4" />
-                        <TextBlock Text="Images (WebP, PNG, JPG, BMP), PDFs, or Subtitles"
+                        <TextBlock Text="Images (WebP, PNG, JPG, BMP), OneNote (.one), PDFs, or Subtitles"
                                    FontSize="11.5"
                                    Foreground="#64748B"
                                    HorizontalAlignment="Center" />
