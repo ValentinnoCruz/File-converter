@@ -31,6 +31,8 @@ public partial class RadialMenuWindow : Window
     private readonly SolidColorBrush _normalTextBrush;
     private readonly SolidColorBrush _activeTextBrush;
 
+    public event Action<ConversionOption>? OnOptionSelected;
+
     public RadialMenuWindow(
         IReadOnlyList<string> sourceFilePaths,
         IReadOnlyList<ConversionOption> options,
@@ -72,6 +74,33 @@ public partial class RadialMenuWindow : Window
 
         _activeTextBrush = new SolidColorBrush(Colors.White);
         _activeTextBrush.Freeze();
+
+        CenterHub.Cursor = System.Windows.Input.Cursors.Hand;
+        CenterHub.MouseLeftButtonDown += (s, e) => { e.Handled = true; Close(); };
+        HubPill.Cursor = System.Windows.Input.Cursors.Hand;
+        HubPill.MouseLeftButtonDown += (s, e) => { e.Handled = true; Close(); };
+
+        RootGrid.MouseLeftButtonDown += (s, e) =>
+        {
+            if (e.OriginalSource == RootGrid)
+            {
+                Close();
+            }
+        };
+
+        KeyDown += (s, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                Close();
+            }
+        };
+
+        MouseMove += (s, e) =>
+        {
+            var p = e.GetPosition(this);
+            UpdateCursor(Left + p.X, Top + p.Y);
+        };
 
         UpdateTopBadge();
         PositionWindow(screenX, screenY);
@@ -122,7 +151,21 @@ public partial class RadialMenuWindow : Window
                 Fill = _normalSliceBrush,
                 Stroke = _normalStrokeBrush,
                 StrokeThickness = 1.1,
-                Tag = i
+                Tag = i,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+
+            int sliceIndex = i;
+            var chosenOption = opt;
+            path.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                OnOptionSelected?.Invoke(chosenOption);
+            };
+            path.MouseRightButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                OnOptionSelected?.Invoke(chosenOption);
             };
 
             SlicesContainer.Children.Add(path);

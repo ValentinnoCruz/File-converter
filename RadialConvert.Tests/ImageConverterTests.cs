@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using RadialConvert.Core.Services;
@@ -220,6 +221,14 @@ public class ImageConverterTests
         var hubPoint = new Point(190, 190);
         int hubSector = RadialGeometryHelper.GetSectorIndex(hubPoint, center, 6);
         Assert.AreEqual(-1, hubSector);
+    }
+
+    [TestMethod]
+    public void ExplorerService_CheckInitialization()
+    {
+        var svc = new ExplorerService();
+        var paths = svc.GetTargetFilePaths(new ExplorerService.POINT { X = -10000, Y = -10000 });
+        Assert.IsNotNull(paths);
     }
 
     [TestMethod]

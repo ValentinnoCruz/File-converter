@@ -23,6 +23,9 @@ public class ExplorerService
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
     private const uint GA_ROOT = 2;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -50,9 +53,24 @@ public class ExplorerService
             return true;
         }
 
-        if (childClass is "SHELLDLL_DefView" or "DirectUIHWND" or "SysListView32" or "XamlWidgetHostInputSinkWindow")
+        if (childClass is "SHELLDLL_DefView" or "DirectUIHWND" or "SysListView32" or "XamlWidgetHostInputSinkWindow" or "XamlExplorerHostIslandWindow")
         {
             return true;
+        }
+
+        // Process check: Is the window owned by explorer.exe?
+        GetWindowThreadProcessId(hwndUnderPoint, out uint pid);
+        if (pid > 0)
+        {
+            try
+            {
+                var proc = Process.GetProcessById((int)pid);
+                if (string.Equals(proc.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            catch { }
         }
 
         return false;
@@ -76,7 +94,7 @@ public class ExplorerService
             dynamic? shell = Activator.CreateInstance(shellType);
             if (shell == null) return results;
 
-            // Collect all candidate open folder paths
+            // Collect all candidate open folder paths + standard user folders
             var openFolderPaths = new List<string>();
             dynamic windows = shell.Windows();
             for (int i = 0; i < windows.Count; i++)
@@ -97,10 +115,31 @@ public class ExplorerService
                 catch { }
             }
 
-            var desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            if (!openFolderPaths.Contains(desktopDir)) openFolderPaths.Add(desktopDir);
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] standardDirs =
+            {
+                Path.Combine(userProfile, "Downloads"),
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
+            };
+            foreach (var dir in standardDirs)
+            {
+                if (Directory.Exists(dir) && !openFolderPaths.Contains(dir))
+                {
+                    openFolderPaths.Add(dir);
+                }
+            }
 
-            // 1. Try currently selected items in all active windows
+            // 1. First try UI Automation directly at cursor coordinates (most accurate to user click)
+            var uiaPath = GetPathFromUIAutomation(pt, openFolderPaths);
+            if (!string.IsNullOrEmpty(uiaPath) && File.Exists(uiaPath))
+            {
+                results.Add(uiaPath);
+                return results;
+            }
+
+            // 2. Try currently selected items in all active windows
             for (int i = 0; i < windows.Count; i++)
             {
                 try
@@ -115,7 +154,7 @@ public class ExplorerService
                 catch { }
             }
 
-            // 2. Desktop items if clicking desktop
+            // 3. Desktop items if clicking desktop
             if (rootClass is "Progman" or "WorkerW")
             {
                 var dPaths = GetDesktopSelectedFilePaths(shell);
@@ -123,18 +162,6 @@ public class ExplorerService
                 {
                     results.AddRange(dPaths);
                 }
-            }
-
-            if (results.Count > 0)
-            {
-                return results.Distinct().ToList();
-            }
-
-            // 3. Fallback: UI Automation hit testing at cursor coordinates
-            var uiaPath = GetPathFromUIAutomation(pt, openFolderPaths);
-            if (!string.IsNullOrEmpty(uiaPath) && File.Exists(uiaPath))
-            {
-                results.Add(uiaPath);
             }
         }
         catch (Exception ex)
@@ -216,9 +243,9 @@ public class ExplorerService
             var element = AutomationElement.FromPoint(new System.Windows.Point(pt.X, pt.Y));
             if (element == null) return null;
 
-            // Check element itself and up to 3 parent levels (in case text/icon child was hit)
+            // Check element itself and up to 8 parent levels
             var current = element;
-            for (int depth = 0; depth < 4 && current != null; depth++)
+            for (int depth = 0; depth < 8 && current != null; depth++)
             {
                 string name = current.Current.Name;
                 if (!string.IsNullOrWhiteSpace(name))
@@ -235,11 +262,10 @@ public class ExplorerService
                         {
                             try
                             {
-                                var matches = Directory.GetFiles(folder, name + ".*");
-                                if (matches.Length > 0 && File.Exists(matches[0]))
-                                {
-                                    return matches[0];
-                                }
+                                var match = Directory.EnumerateFiles(folder).FirstOrDefault(f =>
+                                    string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+                                if (match != null) return match;
                             }
                             catch { }
                         }

@@ -105,42 +105,47 @@ public class GlobalInputHook : IDisposable
 
             if (msg == WM_RBUTTONDOWN)
             {
-                bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+                bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 ||
+                                   (GetAsyncKeyState(0xA0) & 0x8000) != 0 ||
+                                   (GetAsyncKeyState(0xA1) & 0x8000) != 0;
+
                 if (isShiftDown)
                 {
                     var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
                     if (_explorerService.IsExplorerOrDesktopWindow(expPt, out _))
                     {
-                        // Give Explorer ~20ms to register focus on the clicked item
-                        Task.Run(async () =>
+                        var filePaths = _explorerService.GetTargetFilePaths(expPt);
+
+                        if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
                         {
-                            try
+                            var options = _imageConverter.GetOptions(filePaths);
+                            if (options.Count > 0)
                             {
-                                await Task.Delay(20);
-                                var filePaths = _explorerService.GetTargetFilePaths(expPt);
+                                _currentFilePaths = filePaths;
+                                _isRadialMenuOpen = true;
 
-                                if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
+                                System.Windows.Application.Current.Dispatcher.Invoke(() =>
                                 {
-                                    var options = _imageConverter.GetOptions(filePaths);
-                                    if (options.Count > 0)
+                                    CloseRadialMenu();
+                                    _currentRadialWindow = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
+                                    _currentRadialWindow.OnOptionSelected += (selectedOption) =>
                                     {
-                                        _currentFilePaths = filePaths;
-                                        _isRadialMenuOpen = true;
+                                        ExecuteConversion(selectedOption);
+                                    };
+                                    _currentRadialWindow.Closed += (s, e) =>
+                                    {
+                                        _isRadialMenuOpen = false;
+                                        _currentRadialWindow = null;
+                                        _currentFilePaths = null;
+                                    };
+                                    _currentRadialWindow.Show();
+                                    _currentRadialWindow.Activate();
+                                });
 
-                                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                                        {
-                                            CloseRadialMenu();
-                                            _currentRadialWindow = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
-                                            _currentRadialWindow.Show();
-                                        });
-                                    }
-                                }
+                                // Swallow WM_RBUTTONDOWN so Windows Explorer context menu doesn't show
+                                return (IntPtr)1;
                             }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"Error preparing radial menu: {ex.Message}");
-                            }
-                        });
+                        }
                     }
                 }
             }
@@ -148,7 +153,7 @@ public class GlobalInputHook : IDisposable
             {
                 if (_isRadialMenuOpen && _currentRadialWindow != null)
                 {
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                     {
                         if (_isRadialMenuOpen && _currentRadialWindow != null)
                         {
@@ -161,43 +166,17 @@ public class GlobalInputHook : IDisposable
             {
                 if (_isRadialMenuOpen)
                 {
-                    _isRadialMenuOpen = false;
-
-                    // Execute chosen option on release
-                    System.Windows.Application.Current.Dispatcher.Invoke(async () =>
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
                         if (_currentRadialWindow != null && _currentFilePaths != null)
                         {
                             var selectedOption = _currentRadialWindow.GetSelectedOption();
-                            var windowToClose = _currentRadialWindow;
-                            var sourceFiles = _currentFilePaths;
-                            _currentRadialWindow = null;
-                            _currentFilePaths = null;
-
                             if (selectedOption != null)
                             {
-                                windowToClose.ShowConvertingFeedback(selectedOption.TargetExtension);
-                                await Task.Delay(150);
-                                windowToClose.Close();
-
-                                try
-                                {
-                                    var createdPaths = await _imageConverter.ConvertBatchAsync(sourceFiles, selectedOption.Id);
-                                    _onConversionSuccess?.Invoke(createdPaths);
-                                }
-                                catch (Exception ex)
-                                {
-                                    System.Windows.MessageBox.Show(
-                                        $"Failed to convert file(s):\n{ex.Message}",
-                                        "Open Tangerine Error",
-                                        MessageBoxButton.OK,
-                                        MessageBoxImage.Error);
-                                }
+                                ExecuteConversion(selectedOption);
                             }
-                            else
-                            {
-                                windowToClose.Close();
-                            }
+                            // If selectedOption == null (e.g. mouse released in center hub),
+                            // keep the radial menu open so the user can click their choice!
                         }
                     });
 
@@ -208,6 +187,45 @@ public class GlobalInputHook : IDisposable
         }
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    private void ExecuteConversion(ConversionOption selectedOption)
+    {
+        if (_currentRadialWindow == null || _currentFilePaths == null) return;
+
+        var windowToClose = _currentRadialWindow;
+        var sourceFiles = _currentFilePaths;
+        _currentRadialWindow = null;
+        _currentFilePaths = null;
+        _isRadialMenuOpen = false;
+
+        windowToClose.ShowConvertingFeedback(selectedOption.TargetExtension);
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(150);
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try { windowToClose.Close(); } catch { }
+                });
+
+                var createdPaths = await _imageConverter.ConvertBatchAsync(sourceFiles, selectedOption.Id);
+                _onConversionSuccess?.Invoke(createdPaths);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Failed to convert file(s):\n{ex.Message}",
+                        "Open Tangerine Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                });
+            }
+        });
     }
 
     private void CloseRadialMenu()
