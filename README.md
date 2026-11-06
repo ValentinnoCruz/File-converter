@@ -72,6 +72,7 @@ A high-performance, native Windows clone of **[Open Tangerine](https://github.co
 ```
 
 ---
+<img width="889" height="720" alt="2026-11-06 14_04_37-Open Tangerine" src="https://github.com/user-attachments/assets/9b435379-53c4-46e4-9158-6f22f3b9fa79" />
 
 ## 🧪 Testing & Execution
 
