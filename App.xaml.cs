@@ -29,71 +29,113 @@ public partial class App : System.Windows.Application
     private ImageConverter? _imageConverter;
     private MainWindow? _mainWindow;
 
+    private static void Log(string message)
+    {
+        try
+        {
+            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenTangerine");
+            Directory.CreateDirectory(logDir);
+            File.AppendAllText(Path.Combine(logDir, "app.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{Environment.ProcessId}] {message}\r\n");
+        }
+        catch { }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        DispatcherUnhandledException += (s, args) =>
+        {
+            Log($"DISPATCHER UNHANDLED EXCEPTION: {args.Exception}");
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            Log($"APPDOMAIN UNHANDLED EXCEPTION: {args.ExceptionObject}");
+        };
+
+        Log("App.OnStartup began");
+
         // Attach to calling PowerShell/CMD console if available
         AttachConsole(ATTACH_PARENT_PROCESS);
 
-        // Ensure single running instance
-        const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
-        _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
-        if (!createdNew)
+        try
         {
-            Console.WriteLine("\n[Open Tangerine] App is already running in your system tray.");
-            System.Windows.MessageBox.Show(
-                "Open Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
-                "Open Tangerine Already Active",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            Shutdown();
-            return;
-        }
+            // Ensure single running instance
+            const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
+            _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
+            Log($"Mutex created, createdNew={createdNew}");
 
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
-
-        _explorerService = new ExplorerService();
-        _imageConverter = new ImageConverter();
-        _mainWindow = new MainWindow(_imageConverter);
-
-        _trayManager = new TrayIconManager();
-        _trayManager.OnRequestExit = () => Shutdown();
-        _trayManager.OnRequestOpenWindow = () =>
-        {
-            _mainWindow.Show();
-            _mainWindow.WindowState = WindowState.Normal;
-            _mainWindow.Activate();
-        };
-
-        _inputHook = new GlobalInputHook(
-            _explorerService,
-            _imageConverter,
-            onConversionSuccess: (createdPaths) =>
+            if (!createdNew)
             {
-                _trayManager.NotifyConversions(createdPaths);
-            });
+                Log("Another instance is already running (createdNew=false). Shutting down.");
+                Console.WriteLine("\n[Open Tangerine] App is already running in your system tray.");
+                System.Windows.MessageBox.Show(
+                    "Open Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
+                    "Open Tangerine Already Active",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                Shutdown();
+                return;
+            }
 
-        _inputHook.Start();
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        Console.WriteLine("\n=======================================================");
-        Console.WriteLine("  Open Tangerine (Windows Native) is running!");
-        Console.WriteLine("  - Desktop batch window opened.");
-        Console.WriteLine("  - Hold SHIFT + RIGHT-CLICK on any file in File Explorer");
-        Console.WriteLine("    to open the frosted glass conversion wheel.");
-        Console.WriteLine("=======================================================\n");
+            Log("Initializing services...");
+            _explorerService = new ExplorerService();
+            _imageConverter = new ImageConverter();
+            _mainWindow = new MainWindow(_imageConverter);
 
-        // Show window by default unless user launched explicitly with --background
-        bool startInBackground = e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase);
-        if (!startInBackground)
+            Log("Initializing TrayManager...");
+            _trayManager = new TrayIconManager();
+            _trayManager.OnRequestExit = () => Shutdown();
+            _trayManager.OnRequestOpenWindow = () =>
+            {
+                _mainWindow.Show();
+                _mainWindow.WindowState = WindowState.Normal;
+                _mainWindow.Activate();
+            };
+
+            Log("Initializing InputHook...");
+            _inputHook = new GlobalInputHook(
+                _explorerService,
+                _imageConverter,
+                onConversionSuccess: (createdPaths) =>
+                {
+                    _trayManager.NotifyConversions(createdPaths);
+                });
+
+            _inputHook.Start();
+            Log("InputHook started successfully.");
+
+            Console.WriteLine("\n=======================================================");
+            Console.WriteLine("  Open Tangerine (Windows Native) is running!");
+            Console.WriteLine("  - Desktop batch window opened.");
+            Console.WriteLine("  - Hold SHIFT + RIGHT-CLICK on any file in File Explorer");
+            Console.WriteLine("    to open the frosted glass conversion wheel.");
+            Console.WriteLine("=======================================================\n");
+
+            // Show window by default unless user launched explicitly with --background
+            bool startInBackground = e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase);
+            if (!startInBackground)
+            {
+                Log("Showing MainWindow...");
+                _mainWindow.Show();
+                _mainWindow.Activate();
+                Log("MainWindow shown.");
+            }
+        }
+        catch (Exception ex)
         {
-            _mainWindow.Show();
-            _mainWindow.Activate();
+            Log($"CRITICAL EXCEPTION IN ONSTARTUP: {ex}");
+            MessageBox.Show($"Open Tangerine startup error:\n{ex}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
         }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Log($"App.OnExit called with ExitCode={e.ApplicationExitCode}. CallStack:\n{Environment.StackTrace}");
         _inputHook?.Dispose();
         _trayManager?.Dispose();
         _singleInstanceMutex?.ReleaseMutex();
