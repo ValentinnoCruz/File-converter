@@ -1,7 +1,7 @@
 <Window x:Class="RadialConvert.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Open Tangerine"
+        Title="O-Tangerine"
         Height="700" Width="840"
         MinHeight="600" MinWidth="750"
         WindowStartupLocation="CenterScreen"
@@ -74,7 +74,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Open Tangerine"
+            <TextBlock Text="O-Tangerine"
                        FontSize="30"
                        FontWeight="Bold"
                        Foreground="#FF762B" />
@@ -82,7 +82,7 @@
                        FontSize="13"
                        Foreground="#94A3B8"
                        Margin="0,4,0,2" />
-            <TextBlock Text="Local processing · Originals kept · Shift+Right-Click files in Explorer anytime"
+            <TextBlock Text="Local processing · Originals kept · Hold Shift &amp; Drag files or Shift+Right-Click"
                        FontSize="11.5"
                        Foreground="#64748B" />
         </StackPanel>

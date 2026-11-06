@@ -20,7 +20,7 @@ public class ImageConverterTests
     [TestInitialize]
     public void Setup()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), "OpenTangerine_Tests_" + Guid.NewGuid().ToString("N"));
+        _testDir = Path.Combine(Path.GetTempPath(), "OTangerine_Tests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_testDir);
     }
 
@@ -200,7 +200,7 @@ public class ImageConverterTests
     [TestMethod]
     public void RadialGeometryHelper_CreatesRoundedGlassSegment()
     {
-        var center = new Point(190, 190);
+        var center = new Point(135, 135);
         var geom = RadialGeometryHelper.CreateRoundedGlassSegmentGeometry(center, 0, 6);
 
         Assert.IsNotNull(geom);
@@ -208,17 +208,17 @@ public class ImageConverterTests
         Assert.IsTrue(geom.Figures[0].IsClosed);
 
         // Test label position at 12 o'clock for index 0
-        var labelPos = RadialGeometryHelper.GetLabelPosition(center, 0, 6, radius: 120);
-        Assert.AreEqual(190, labelPos.X, 0.001);
-        Assert.IsTrue(labelPos.Y < 190, "12 o'clock should place Y above center");
+        var labelPos = RadialGeometryHelper.GetLabelPosition(center, 0, 6, radius: 80);
+        Assert.AreEqual(135, labelPos.X, 0.001);
+        Assert.IsTrue(labelPos.Y < 135, "12 o'clock should place Y above center");
 
         // Sector hit-test: point above center (0 deg) should return sector 0
-        var topPoint = new Point(190, 70); // radius 120 above center
+        var topPoint = new Point(135, 55); // radius 80 above center
         int sector = RadialGeometryHelper.GetSectorIndex(topPoint, center, 6);
         Assert.AreEqual(0, sector);
 
         // Center hub hit-test: point inside inner radius should return -1
-        var hubPoint = new Point(190, 190);
+        var hubPoint = new Point(135, 135);
         int hubSector = RadialGeometryHelper.GetSectorIndex(hubPoint, center, 6);
         Assert.AreEqual(-1, hubSector);
     }
@@ -226,7 +226,7 @@ public class ImageConverterTests
     [TestMethod]
     public void Test_HookLifecycle()
     {
-        const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
+        const string mutexName = "Global\\OTangerine_SingleInstance_Mutex";
         try
         {
             var m = new Mutex(true, mutexName, out bool createdNew);

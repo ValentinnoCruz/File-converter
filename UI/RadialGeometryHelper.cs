@@ -9,10 +9,10 @@ namespace RadialConvert.UI;
 
 public static class RadialGeometryHelper
 {
-    public const double CenterX = 190.0;
-    public const double CenterY = 190.0;
-    public const double OuterRadius = 174.0;
-    public const double InnerRadius = 72.0;
+    public const double CenterX = 135.0;
+    public const double CenterY = 135.0;
+    public const double OuterRadius = 115.0;
+    public const double InnerRadius = 45.0;
 
     public static Point GetPointOnCircle(Point center, double radius, double angleDeg)
     {
@@ -58,15 +58,15 @@ public static class RadialGeometryHelper
         }
 
         double step = 360.0 / count;
-        // Centers sector i at (index * step - 90 deg) like Open Tangerine
+        // Centers sector i at (index * step - 90 deg) like O-Tangerine
         double midAngle = index * step - 90.0;
         double gapDeg = count >= 6 ? 2.5 : 2.0;
         double startAngle = midAngle - (step / 2.0) + gapDeg;
         double endAngle = midAngle + (step / 2.0) - gapDeg;
 
-        double rounding = Math.Min(5.0, step / 8.0);
-        double midInnerRadius = innerRadius + 13.0; // corner curve transition
-        double midOuterRadius = outerRadius - 13.0;
+        double rounding = Math.Min(4.0, step / 9.0);
+        double midInnerRadius = innerRadius + 9.0; // corner curve transition
+        double midOuterRadius = outerRadius - 9.0;
 
         Point p1 = GetPointOnCircle(center, outerRadius, startAngle + rounding);
         Point p2 = GetPointOnCircle(center, outerRadius, endAngle - rounding);
@@ -118,14 +118,14 @@ public static class RadialGeometryHelper
         return geom;
     }
 
-    public static Point GetLabelPosition(Point center, int index, int count, double radius = 123.0)
+    public static Point GetLabelPosition(Point center, int index, int count, double radius = 80.0)
     {
         double step = 360.0 / count;
         double midAngle = index * step - 90.0;
         return GetPointOnCircle(center, radius, midAngle);
     }
 
-    public static int GetSectorIndex(Point mousePoint, Point center, int count, double minRadius = InnerRadius, double maxRadius = OuterRadius + 2.0)
+    public static int GetSectorIndex(Point mousePoint, Point center, int count, double minRadius = InnerRadius, double maxRadius = OuterRadius + 4.0)
     {
         if (count <= 0) return -1;
 
@@ -139,7 +139,7 @@ public static class RadialGeometryHelper
         }
 
         double step = 360.0 / count;
-        // In Open Tangerine:
+        // In O-Tangerine:
         // ((math.degrees(math.atan2(dy, dx)) + 90 + 180/count) % 360) / (360/count)
         double deg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
         double normalized = (deg + 90.0 + (step / 2.0)) % 360.0;

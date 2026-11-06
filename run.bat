@@ -1,3 +1,3 @@
 @echo off
-title Open Tangerine
+title O-Tangerine
 dotnet run --project RadialConvert.csproj

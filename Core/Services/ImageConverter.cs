@@ -112,7 +112,7 @@ public class ImageConverter : IFileConverter
         // Case 1: Image files
         if (suffixes.All(s => SupportedImageExtensions.Contains(s)))
         {
-            // Open Tangerine image wheel items: PNG, JPEG, WEBP, TIFF, BMP, PDF
+            // O-Tangerine image wheel items: PNG, JPEG, WEBP, TIFF, BMP, PDF
             options.Add(new ConversionOption
             {
                 Id = "PNG",
