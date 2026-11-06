@@ -256,7 +256,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Conversion error: {ex.Message}", "Open Tangerine", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Conversion error: {ex.Message}", "O-Tangerine", MessageBoxButton.OK, MessageBoxImage.Error);
             StatusMessage.Text = "Error during conversion.";
         }
         finally

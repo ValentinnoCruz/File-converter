@@ -73,7 +73,7 @@ public class TrayIconManager : IDisposable
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    private const string AppName = "OpenTangerine";
+    private const string AppName = "OTangerine";
     private const string StartupRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     private HwndSource? _hwndSource;
@@ -92,7 +92,7 @@ public class TrayIconManager : IDisposable
 
     private void CreateMessageWindow()
     {
-        var parameters = new HwndSourceParameters("OpenTangerine_TrayListener")
+        var parameters = new HwndSourceParameters("OTangerine_TrayListener")
         {
             WindowStyle = 0,
             ExtendedWindowStyle = 0,
@@ -119,7 +119,7 @@ public class TrayIconManager : IDisposable
             uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
             uCallbackMessage = WM_TRAYICON,
             hIcon = _hIcon,
-            szTip = "Open Tangerine (Shift+Right-Click in Explorer)"
+            szTip = "O-Tangerine (Hold Shift & Drag files, or Shift+Right-Click)"
         };
 
         _isAdded = Shell_NotifyIcon(NIM_ADD, ref _nid);
@@ -195,7 +195,7 @@ public class TrayIconManager : IDisposable
 
         var header = new MenuItem
         {
-            Header = "🍊 Open Tangerine (Active)",
+            Header = "🍊 O-Tangerine (Active)",
             FontWeight = FontWeights.Bold,
             IsEnabled = false
         };
@@ -203,7 +203,7 @@ public class TrayIconManager : IDisposable
 
         var openWindowItem = new MenuItem
         {
-            Header = "Open Tangerine Window...",
+            Header = "O-Tangerine Window...",
             FontWeight = FontWeights.SemiBold
         };
         openWindowItem.Click += (s, e) => OnRequestOpenWindow?.Invoke();
@@ -211,7 +211,7 @@ public class TrayIconManager : IDisposable
 
         var tip = new MenuItem
         {
-            Header = "Tip: Shift + Right-Click in Explorer",
+            Header = "Tip: Hold Shift while dragging files, or Shift+Right-Click",
             IsEnabled = false
         };
         menu.Items.Add(tip);
@@ -243,7 +243,7 @@ public class TrayIconManager : IDisposable
 
         var exitItem = new MenuItem
         {
-            Header = "Exit Open Tangerine"
+            Header = "Exit O-Tangerine"
         };
         exitItem.Click += (s, e) => OnRequestExit?.Invoke();
         menu.Items.Add(exitItem);
@@ -278,15 +278,19 @@ public class TrayIconManager : IDisposable
     private void ShowQuickGuide()
     {
         MessageBox.Show(
-            "Open Tangerine is active in the background!\n\n" +
+            "O-Tangerine is active in the background!\n\n" +
             "How to convert:\n" +
-            "1. In File Explorer or Desktop, hold SHIFT and RIGHT-CLICK any file(s).\n" +
-            "2. Keep holding right-click: The frosted glass wheel appears centered at your cursor.\n" +
-            "3. Hover your cursor over the desired format (PNG, JPEG, WEBP, PDF, etc.).\n" +
-            "4. RELEASE right-click to instantly create converted copies in the same directory!\n\n" +
-            "To cancel at any time: release inside the center hub circle.\n" +
-            "Double-click this tray icon anytime to open the Open Tangerine desktop batch window.",
-            "Open Tangerine - Guide",
+            "Method 1 (Drag & Drop - Recommended):\n" +
+            "1. Drag any file(s) in File Explorer or Desktop while holding SHIFT.\n" +
+            "2. The compact frosted glass wheel pops up around your cursor.\n" +
+            "3. Drop the file(s) onto your target format slice (PNG, JPEG, WEBP, PDF, DOCX, etc.).\n" +
+            "4. Your converted copy is immediately created right next to the original!\n\n" +
+            "Method 2 (Shift + Right-Click):\n" +
+            "1. Hold SHIFT and RIGHT-CLICK any file(s) in File Explorer.\n" +
+            "2. Keep right-click held and release on your chosen format, or click any slice.\n\n" +
+            "To cancel: Drop/release inside the center DROP hub or press Escape.\n" +
+            "Double-click this tray icon anytime to open the O-Tangerine desktop batch window.",
+            "O-Tangerine - Guide",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }

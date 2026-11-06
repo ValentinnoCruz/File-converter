@@ -33,7 +33,7 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenTangerine");
+            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OTangerine");
             Directory.CreateDirectory(logDir);
             File.AppendAllText(Path.Combine(logDir, "app.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{Environment.ProcessId}] {message}\r\n");
         }
@@ -62,17 +62,17 @@ public partial class App : System.Windows.Application
         try
         {
             // Ensure single running instance
-            const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
+            const string mutexName = "Global\\OTangerine_SingleInstance_Mutex";
             _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
             Log($"Mutex created, createdNew={createdNew}");
 
             if (!createdNew)
             {
                 Log("Another instance is already running (createdNew=false). Shutting down.");
-                Console.WriteLine("\n[Open Tangerine] App is already running in your system tray.");
+                Console.WriteLine("\n[O-Tangerine] App is already running in your system tray.");
                 System.Windows.MessageBox.Show(
-                    "Open Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
-                    "Open Tangerine Already Active",
+                    "O-Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
+                    "O-Tangerine Already Active",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 Shutdown();
@@ -109,9 +109,9 @@ public partial class App : System.Windows.Application
             Log("InputHook started successfully.");
 
             Console.WriteLine("\n=======================================================");
-            Console.WriteLine("  Open Tangerine (Windows Native) is running!");
+            Console.WriteLine("  O-Tangerine (Windows Native) is running!");
             Console.WriteLine("  - Desktop batch window opened.");
-            Console.WriteLine("  - Hold SHIFT + RIGHT-CLICK on any file in File Explorer");
+            Console.WriteLine("  - Drag any file(s) while holding SHIFT, or Shift+Right-Click");
             Console.WriteLine("    to open the frosted glass conversion wheel.");
             Console.WriteLine("=======================================================\n");
 
@@ -128,7 +128,7 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             Log($"CRITICAL EXCEPTION IN ONSTARTUP: {ex}");
-            MessageBox.Show($"Open Tangerine startup error:\n{ex}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"O-Tangerine startup error:\n{ex}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
     }
