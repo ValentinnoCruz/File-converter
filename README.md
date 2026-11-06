@@ -2,7 +2,9 @@
 
 A high-performance, native Windows file conversion suite inspired by **[Open Tangerine](https://github.com/sintaxerrorpvtltd/Open-Tangerine)**. While Open Tangerine served as the conceptual baseline, **O-Tangerine** has been completely re-engineered from the ground up for the Windows ecosystem with native Win32/WPF architecture, compact frosted glass aesthetics, seamless drag-and-drop workflows, and full Microsoft OneNote (`.one`) document conversion.
 
-![O-Tangerine Screenshot](assets/screenshot.png)
+<p align="center">
+  <img width="889" height="720" alt="O-Tangerine Desktop Companion &amp; Radial Wheel" src="https://github.com/user-attachments/assets/9b435379-53c4-46e4-9158-6f22f3b9fa79" />
+</p>
 
 ---
 
