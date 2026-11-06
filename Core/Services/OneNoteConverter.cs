@@ -37,18 +37,27 @@ public class OneNoteConverter
             var psi = new ProcessStartInfo
             {
                 FileName = "python",
-                Arguments = "-c \"import pdf2docx\"",
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true
             };
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add("import pdf2docx");
+
             using var proc = Process.Start(psi);
             if (proc != null)
             {
-                proc.WaitForExit(3000);
-                _isPythonDocxAvailable = (proc.ExitCode == 0);
-                return _isPythonDocxAvailable.Value;
+                bool finished = proc.WaitForExit(10000);
+                if (finished)
+                {
+                    _isPythonDocxAvailable = (proc.ExitCode == 0);
+                    return _isPythonDocxAvailable.Value;
+                }
+                else
+                {
+                    try { proc.Kill(); } catch { }
+                }
             }
         }
         catch { }

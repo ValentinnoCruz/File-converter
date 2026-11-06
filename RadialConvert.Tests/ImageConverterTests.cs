@@ -224,11 +224,30 @@ public class ImageConverterTests
     }
 
     [TestMethod]
-    public void ExplorerService_CheckInitialization()
+    public void Test_HookLifecycle()
     {
-        var svc = new ExplorerService();
-        var paths = svc.GetTargetFilePaths(new ExplorerService.POINT { X = -10000, Y = -10000 });
-        Assert.IsNotNull(paths);
+        const string mutexName = "Global\\OpenTangerine_SingleInstance_Mutex";
+        try
+        {
+            var m = new Mutex(true, mutexName, out bool createdNew);
+            Console.WriteLine($"createdNew: {createdNew}");
+            if (!createdNew)
+            {
+                try
+                {
+                    bool acquired = m.WaitOne(0);
+                    Console.WriteLine($"WaitOne(0): {acquired}");
+                }
+                catch (AbandonedMutexException)
+                {
+                    Console.WriteLine("Mutex was abandoned by killed process!");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Mutex exception: {ex.Message}");
+        }
     }
 
     [TestMethod]

@@ -53,6 +53,13 @@ public class GlobalInputHook : IDisposable
         public IntPtr dwExtraInfo;
     }
 
+    private const uint EXTRA_INFO_SYNTHETIC = 0x54414E47; // "TANG"
+    private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+
     private readonly LowLevelMouseProc _mouseProc;
     private IntPtr _hookId = IntPtr.Zero;
 
@@ -61,6 +68,7 @@ public class GlobalInputHook : IDisposable
     private readonly Action<IReadOnlyList<string>> _onConversionSuccess;
 
     private volatile bool _isRadialMenuOpen = false;
+    private volatile bool _isShiftRightPending = false;
     private RadialMenuWindow? _currentRadialWindow = null;
     private IReadOnlyList<string>? _currentFilePaths = null;
 
@@ -99,8 +107,13 @@ public class GlobalInputHook : IDisposable
     {
         if (nCode >= 0)
         {
-            int msg = wParam.ToInt32();
             var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+            if (hookStruct.dwExtraInfo == (IntPtr)EXTRA_INFO_SYNTHETIC)
+            {
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+
+            int msg = wParam.ToInt32();
             var pt = hookStruct.pt;
 
             if (msg == WM_RBUTTONDOWN)
@@ -114,38 +127,13 @@ public class GlobalInputHook : IDisposable
                     var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
                     if (_explorerService.IsExplorerOrDesktopWindow(expPt, out _))
                     {
-                        var filePaths = _explorerService.GetTargetFilePaths(expPt);
+                        _isShiftRightPending = true;
 
-                        if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
-                        {
-                            var options = _imageConverter.GetOptions(filePaths);
-                            if (options.Count > 0)
-                            {
-                                _currentFilePaths = filePaths;
-                                _isRadialMenuOpen = true;
+                        // Immediately return to OS without blocking the low-level hook!
+                        // Process the Explorer query asynchronously on a ThreadPool thread.
+                        System.Threading.ThreadPool.QueueUserWorkItem(_ => ProcessShiftRightClickAsync(pt));
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                                {
-                                    CloseRadialMenu();
-                                    _currentRadialWindow = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
-                                    _currentRadialWindow.OnOptionSelected += (selectedOption) =>
-                                    {
-                                        ExecuteConversion(selectedOption);
-                                    };
-                                    _currentRadialWindow.Closed += (s, e) =>
-                                    {
-                                        _isRadialMenuOpen = false;
-                                        _currentRadialWindow = null;
-                                        _currentFilePaths = null;
-                                    };
-                                    _currentRadialWindow.Show();
-                                    _currentRadialWindow.Activate();
-                                });
-
-                                // Swallow WM_RBUTTONDOWN so Windows Explorer context menu doesn't show
-                                return (IntPtr)1;
-                            }
-                        }
+                        return (IntPtr)1; // Swallow WM_RBUTTONDOWN
                     }
                 }
             }
@@ -153,7 +141,7 @@ public class GlobalInputHook : IDisposable
             {
                 if (_isRadialMenuOpen && _currentRadialWindow != null)
                 {
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                    _currentRadialWindow.Dispatcher.BeginInvoke(() =>
                     {
                         if (_isRadialMenuOpen && _currentRadialWindow != null)
                         {
@@ -175,18 +163,78 @@ public class GlobalInputHook : IDisposable
                             {
                                 ExecuteConversion(selectedOption);
                             }
-                            // If selectedOption == null (e.g. mouse released in center hub),
+                            // If selectedOption == null (released in center hub or during quick tap),
                             // keep the radial menu open so the user can click their choice!
                         }
                     });
 
-                    // Swallow the WM_RBUTTONUP so Windows Explorer context menu doesn't show
-                    return (IntPtr)1;
+                    return (IntPtr)1; // Swallow
+                }
+
+                if (_isShiftRightPending)
+                {
+                    return (IntPtr)1; // Swallow while pending
                 }
             }
         }
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    private void ProcessShiftRightClickAsync(POINT pt)
+    {
+        try
+        {
+            var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
+            var filePaths = _explorerService.GetTargetFilePaths(expPt);
+
+            if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
+            {
+                var options = _imageConverter.GetOptions(filePaths);
+                if (options.Count > 0)
+                {
+                    _currentFilePaths = filePaths;
+                    _isRadialMenuOpen = true;
+                    _isShiftRightPending = false;
+
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        CloseRadialMenu();
+                        _currentRadialWindow = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
+                        _currentRadialWindow.OnOptionSelected += (selectedOption) =>
+                        {
+                            ExecuteConversion(selectedOption);
+                        };
+                        _currentRadialWindow.Closed += (s, e) =>
+                        {
+                            _isRadialMenuOpen = false;
+                            _currentRadialWindow = null;
+                            _currentFilePaths = null;
+                        };
+                        _currentRadialWindow.Show();
+                        _currentRadialWindow.Activate();
+                    });
+
+                    return;
+                }
+            }
+
+            // Not handled by Open Tangerine -> pass through right click so Windows shows default menu
+            _isShiftRightPending = false;
+            PassThroughRightClick();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error processing shift right click: {ex.Message}");
+            _isShiftRightPending = false;
+            PassThroughRightClick();
+        }
+    }
+
+    private static void PassThroughRightClick()
+    {
+        mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, (UIntPtr)EXTRA_INFO_SYNTHETIC);
+        mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, (UIntPtr)EXTRA_INFO_SYNTHETIC);
     }
 
     private void ExecuteConversion(ConversionOption selectedOption)
