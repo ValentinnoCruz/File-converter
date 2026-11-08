@@ -133,6 +133,31 @@ public class GlobalInputHook : IDisposable
             {
                 _isLeftDown = false;
                 _dragTriggered = false;
+
+                // On Drag Release (Drop on slice)
+                if (_isRadialMenuOpen)
+                {
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (_currentRadialWindow != null && _currentFilePaths != null && _currentFilePaths.Count > 0)
+                        {
+                            var selectedOption = _currentRadialWindow.GetSelectedOption();
+                            if (selectedOption != null)
+                            {
+                                ExecuteConversion(_currentFilePaths, selectedOption);
+                            }
+                            else
+                            {
+                                // Dropped in center hub or outside wheel -> cancel
+                                CloseRadialMenu();
+                            }
+                        }
+                        else
+                        {
+                            CloseRadialMenu();
+                        }
+                    });
+                }
             }
             else if (msg == WM_RBUTTONDOWN)
             {
@@ -142,16 +167,12 @@ public class GlobalInputHook : IDisposable
 
                 if (isShiftDown)
                 {
-                    var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
-                    if (_explorerService.IsExplorerOrDesktopWindow(expPt, out _))
-                    {
-                        _isShiftRightPending = true;
+                    _isShiftRightPending = true;
 
-                        // Immediately return to OS without blocking the low-level hook!
-                        ThreadPool.QueueUserWorkItem(_ => ProcessShiftRightClickAsync(pt));
+                    // Immediately return to OS without blocking the low-level hook!
+                    ThreadPool.QueueUserWorkItem(_ => ProcessShiftRightClickAsync(pt));
 
-                        return (IntPtr)1; // Swallow WM_RBUTTONDOWN
-                    }
+                    return (IntPtr)1; // Swallow WM_RBUTTONDOWN
                 }
             }
             else if (msg == WM_MOUSEMOVE)
@@ -191,7 +212,7 @@ public class GlobalInputHook : IDisposable
                 {
                     System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
-                        if (_currentRadialWindow != null && _currentFilePaths != null)
+                        if (_currentRadialWindow != null && _currentFilePaths != null && _currentFilePaths.Count > 0)
                         {
                             var selectedOption = _currentRadialWindow.GetSelectedOption();
                             if (selectedOption != null)
@@ -223,10 +244,17 @@ public class GlobalInputHook : IDisposable
             var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
             var filePaths = _explorerService.GetTargetFilePaths(expPt);
 
-            IReadOnlyList<ConversionOption> options = Array.Empty<ConversionOption>();
-            if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
+            if (filePaths == null || filePaths.Count == 0 || !_imageConverter.CanHandleAll(filePaths))
             {
-                options = _imageConverter.GetOptions(filePaths);
+                _dragTriggered = false;
+                return;
+            }
+
+            var options = _imageConverter.GetOptions(filePaths);
+            if (options == null || options.Count == 0)
+            {
+                _dragTriggered = false;
+                return;
             }
 
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -236,7 +264,7 @@ public class GlobalInputHook : IDisposable
                 _currentFilePaths = filePaths;
                 _isRadialMenuOpen = true;
 
-                var window = new RadialMenuWindow(filePaths ?? Array.Empty<string>(), options, pt.x, pt.y);
+                var window = new RadialMenuWindow(filePaths, options, pt.x, pt.y);
                 _currentRadialWindow = window;
 
                 window.OnOptionSelected += (selectedOption) =>
@@ -252,16 +280,6 @@ public class GlobalInputHook : IDisposable
                     ExecuteConversion(droppedFiles, selectedOption);
                 };
 
-                window.OnFilesProvided += (providedFiles) =>
-                {
-                    if (providedFiles != null && providedFiles.Count > 0 && _imageConverter.CanHandleAll(providedFiles))
-                    {
-                        _currentFilePaths = providedFiles;
-                        var newOptions = _imageConverter.GetOptions(providedFiles);
-                        window.SetData(providedFiles, newOptions);
-                    }
-                };
-
                 window.Closed += (s, e) =>
                 {
                     _isRadialMenuOpen = false;
@@ -275,6 +293,7 @@ public class GlobalInputHook : IDisposable
         }
         catch (Exception ex)
         {
+            _dragTriggered = false;
             Debug.WriteLine($"Error starting drag radial menu: {ex.Message}");
         }
     }
@@ -289,7 +308,7 @@ public class GlobalInputHook : IDisposable
             if (filePaths != null && filePaths.Count > 0 && _imageConverter.CanHandleAll(filePaths))
             {
                 var options = _imageConverter.GetOptions(filePaths);
-                if (options.Count > 0)
+                if (options != null && options.Count > 0)
                 {
                     _currentFilePaths = filePaths;
                     _isRadialMenuOpen = true;

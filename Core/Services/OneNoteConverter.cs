@@ -14,6 +14,45 @@ public class OneNoteConverter
     private static bool? _isOneNoteInstalled;
     private static bool? _isPythonDocxAvailable;
 
+    static OneNoteConverter()
+    {
+        // Pre-warm checks in the background so GetOptions returns instantly (0ms) on user interaction
+        Task.Run(() =>
+        {
+            try
+            {
+                using var key = Registry.ClassesRoot.OpenSubKey("OneNote.Application");
+                _isOneNoteInstalled = (key != null);
+            }
+            catch { _isOneNoteInstalled = false; }
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "python",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add("import pdf2docx");
+                using var proc = Process.Start(psi);
+                if (proc != null && proc.WaitForExit(8000))
+                {
+                    _isPythonDocxAvailable = (proc.ExitCode == 0);
+                }
+                else
+                {
+                    try { proc?.Kill(); } catch { }
+                    _isPythonDocxAvailable = false;
+                }
+            }
+            catch { _isPythonDocxAvailable = false; }
+        });
+    }
+
     public bool IsOneNoteAvailable()
     {
         if (_isOneNoteInstalled.HasValue) return _isOneNoteInstalled.Value;
