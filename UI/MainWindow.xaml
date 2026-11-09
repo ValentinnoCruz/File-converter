@@ -73,19 +73,32 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="O-Tangerine"
-                       FontSize="30"
-                       FontWeight="Bold"
-                       Foreground="#FF762B" />
-            <TextBlock Text="Drop your files. Choose an output. Keep working."
-                       FontSize="13"
-                       Foreground="#94A3B8"
-                       Margin="0,4,0,2" />
-            <TextBlock Text="Local processing · Originals kept · Hold Shift &amp; Drag files or Shift+Right-Click"
-                       FontSize="11.5"
-                       Foreground="#64748B" />
-        </StackPanel>
+        <DockPanel Grid.Row="0" Margin="0,0,0,16" LastChildFill="False">
+            <StackPanel DockPanel.Dock="Left">
+                <TextBlock Text="O-Tangerine"
+                           FontSize="30"
+                           FontWeight="Bold"
+                           Foreground="#FF762B" />
+                <TextBlock Text="Drop your files. Choose an output. Keep working."
+                           FontSize="13"
+                           Foreground="#94A3B8"
+                           Margin="0,4,0,2" />
+                <TextBlock Text="Hold Shift &amp; Drag files, or Shift+Right-Click, or press Ctrl+Shift+X"
+                           FontSize="11.5"
+                           Foreground="#64748B" />
+            </StackPanel>
+
+            <!-- Running Status Badge & Test Wheel Button -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="#1A2E22" BorderBrush="#10B981" BorderThickness="1" CornerRadius="8" Padding="12,6" Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Running &amp; Watching" FontSize="12" FontWeight="SemiBold" Foreground="#10B981" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Button Content="🎯 Test Wheel Popup" Style="{StaticResource TangerineButton}" Click="TestWheel_Click" />
+            </StackPanel>
+        </DockPanel>
 
         <!-- Workspace: Embedded Glass Wheel (left) + File Drop Zone (right) -->
         <Grid Grid.Row="1" Margin="0,0,0,16">

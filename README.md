@@ -15,8 +15,14 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
   - The compact **frosted glass radial wheel** instantly blooms around your cursor.
   - Drop the file(s) onto your target format slice (PNG, JPEG, WEBP, PDF, DOCX, etc.) to immediately create converted copies right next to the original files!
   - Drop onto the center hub circle (`DROP`) or press `Escape` to cancel.
-- **Alternative Shift + Right-Click**:
+- **Alternative Shift + Right-Click & Global Hotkey**:
   - Hold `Shift` and right-click on any file(s) in File Explorer to bring up the wheel and convert via click or release.
+  - Or select any file(s) in File Explorer and press **`Ctrl + Shift + X`** to immediately open the wheel at your cursor.
+- **How to Know It's Running**:
+  - **System Tray Icon**: Look for the bright orange citrus icon 🍊 in your taskbar (next to the clock or inside the `^` overflow menu).
+  - **Startup Toast**: When launched, O-Tangerine plays a notification sound and displays a balloon tip: *"O-Tangerine is Running!"*
+  - **Desktop Window Badge**: The main window shows a bright green badge: `🟢 Running & Watching`.
+  - **Test Wheel Button**: Click `🎯 Test Wheel Popup` inside the main window anytime to preview and test the glass radial menu.
 - **Refined Compact Frosted Glass Radial Wheel**:
   - Compact, ergonomic geometry (diameter ~230px) optimized for rapid gesture targeting.
   - Translucent acrylic frosted glass styling with subtle refraction and crisp white specular rim.
@@ -63,8 +69,13 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
                                                 [Converted in-place!]
 ```
 
+### Global Hotkey:
+```
+[Select File(s) in Explorer] ──> [Press Ctrl + Shift + X] ──> [Wheel blooms at cursor!]
+```
+
 ### Desktop Companion Window:
-- Double-click the orange citrus icon in your system tray or run `dotnet run`.
+- Double-click the orange citrus icon in your system tray or the desktop shortcut **O-Tangerine**.
 - Drag and drop files directly into the drop zone, choose an output format from the embedded wheel or dropdown, and click **Convert files**.
 
 ---
@@ -85,7 +96,7 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 │   ├── RadialGeometryHelper.cs     # Compact sector geometry & polar hit-testing
 │   ├── RadialMenuWindow.xaml       # Compact frosted glass wheel with OLE drag/drop
 │   ├── MainWindow.xaml             # O-Tangerine companion desktop batch window
-│   └── TrayIconManager.cs          # Native notification area tray manager
+│   └── TrayIconManager.cs          # Native notification area tray manager & hotkey listener
 ├── RadialConvert.Tests/            # Comprehensive unit test suite (12 passing tests)
 ├── assets/
 │   └── screenshot.png              # O-Tangerine application screenshot
@@ -94,7 +105,6 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 ```
 
 ---
-<img width="889" height="720" alt="2026-11-06 14_04_37-Open Tangerine" src="https://github.com/user-attachments/assets/9b435379-53c4-46e4-9158-6f22f3b9fa79" />
 
 ## 🧪 Testing & Execution
 

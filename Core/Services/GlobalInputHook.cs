@@ -90,13 +90,27 @@ public class GlobalInputHook : IDisposable
         _mouseProc = HookCallback;
     }
 
+    public bool IsRunning => _hookId != IntPtr.Zero;
+
     public void Start()
     {
         if (_hookId != IntPtr.Zero) return;
 
         using var curProcess = Process.GetCurrentProcess();
         using var curModule = curProcess.MainModule;
-        _hookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, GetModuleHandle(curModule?.ModuleName ?? string.Empty), 0);
+        string modName = curModule?.ModuleName ?? string.Empty;
+        IntPtr hMod = GetModuleHandle(modName);
+        if (hMod == IntPtr.Zero)
+        {
+            hMod = GetModuleHandle(null!);
+        }
+
+        _hookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, hMod, 0);
+        if (_hookId == IntPtr.Zero)
+        {
+            // Fallback: try with IntPtr.Zero
+            _hookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, IntPtr.Zero, 0);
+        }
     }
 
     public void Stop()
