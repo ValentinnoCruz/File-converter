@@ -48,11 +48,15 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Disable WPF Stylus & Touch worker thread to prevent PenIMC DllNotFoundException on Windows
+        AppContext.SetSwitch("Switch.System.Windows.Input.Stylus.DisableStylusAndTouchSupport", true);
+
         base.OnStartup(e);
 
         DispatcherUnhandledException += (s, args) =>
         {
-            Log($"DISPATCHER UNHANDLED EXCEPTION: {args.Exception}");
+            Log($"DISPATCHER UNHANDLED EXCEPTION (HANDLED): {args.Exception}");
+            args.Handled = true; // Prevent crash, keep daemon running
         };
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
