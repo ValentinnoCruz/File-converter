@@ -18,12 +18,12 @@ public class GoogleDocsConverter
 {
     private static readonly HashSet<string> WordExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".docx", ".doc"
+        ".docx", ".doc", ".rtf", ".odt"
     };
 
     private static readonly HashSet<string> ExcelExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".xlsx", ".xls"
+        ".xlsx", ".xls", ".csv", ".tsv", ".ods"
     };
 
     private static readonly string[] Scopes = { DriveService.Scope.DriveFile };
@@ -76,18 +76,33 @@ public class GoogleDocsConverter
                 Description = "Google Sheet (Zero Formatting Loss)",
                 TargetExtension = ".gsheet"
             });
-            options.Add(new ConversionOption
+
+            if (suffixes.All(s => s is ".csv" or ".tsv"))
             {
-                Id = "CSV",
-                DisplayName = "CSV",
-                Description = "Comma-Separated Values",
-                TargetExtension = ".csv"
-            });
+                options.Add(new ConversionOption
+                {
+                    Id = "XLSX",
+                    DisplayName = "XLSX",
+                    Description = "Excel Workbook",
+                    TargetExtension = ".xlsx"
+                });
+            }
+            else
+            {
+                options.Add(new ConversionOption
+                {
+                    Id = "CSV",
+                    DisplayName = "CSV",
+                    Description = "Comma-Separated Values",
+                    TargetExtension = ".csv"
+                });
+            }
+
             options.Add(new ConversionOption
             {
                 Id = "PDF",
                 DisplayName = "PDF",
-                Description = "Excel → PDF Document",
+                Description = "Spreadsheet → PDF Document",
                 TargetExtension = ".pdf"
             });
         }
@@ -133,6 +148,10 @@ public class GoogleDocsConverter
             {
                 return await Task.Run(() => ConvertExcelToCsvOffline(sourcePath), cancellationToken);
             }
+            if (normalizedTarget == "XLSX")
+            {
+                return await Task.Run(() => ConvertCsvToXlsxOffline(sourcePath), cancellationToken);
+            }
             if (normalizedTarget == "PDF")
             {
                 return await Task.Run(() => ConvertExcelToPdfOffline(sourcePath), cancellationToken);
@@ -151,9 +170,13 @@ public class GoogleDocsConverter
         string directory = Path.GetDirectoryName(sourcePath) ?? Environment.CurrentDirectory;
         string ext = Path.GetExtension(sourcePath).ToLowerInvariant();
 
-        string sourceMime = ext == ".doc"
-            ? "application/msword"
-            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        string sourceMime = ext switch
+        {
+            ".doc" => "application/msword",
+            ".rtf" => "application/rtf",
+            ".odt" => "application/vnd.oasis.opendocument.text",
+            _ => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
 
         var fileMetadata = new Google.Apis.Drive.v3.Data.File
         {
@@ -206,9 +229,14 @@ public class GoogleDocsConverter
         string directory = Path.GetDirectoryName(sourcePath) ?? Environment.CurrentDirectory;
         string ext = Path.GetExtension(sourcePath).ToLowerInvariant();
 
-        string sourceMime = ext == ".xls"
-            ? "application/vnd.ms-excel"
-            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        string sourceMime = ext switch
+        {
+            ".xls" => "application/vnd.ms-excel",
+            ".csv" => "text/csv",
+            ".tsv" => "text/tab-separated-values",
+            ".ods" => "application/vnd.oasis.opendocument.spreadsheet",
+            _ => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        };
 
         var fileMetadata = new Google.Apis.Drive.v3.Data.File
         {
@@ -457,6 +485,46 @@ public class GoogleDocsConverter
             {
                 // 0 = xlTypePDF
                 wb.ExportAsFixedFormat(0, destPath);
+                return destPath;
+            }
+            finally
+            {
+                wb.Close(false);
+            }
+        }
+        finally
+        {
+            excelApp.Quit();
+        }
+    }
+
+    private string ConvertCsvToXlsxOffline(string sourcePath)
+    {
+        string directory = Path.GetDirectoryName(sourcePath) ?? Environment.CurrentDirectory;
+        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(sourcePath);
+        string destPath = GetUniquePath(directory, fileNameWithoutExt, ".xlsx");
+
+        Type? excelType = Type.GetTypeFromProgID("Excel.Application");
+        if (excelType == null)
+        {
+            throw new InvalidOperationException("Microsoft Excel is not installed on this system for offline XLSX conversion.");
+        }
+
+        dynamic? excelApp = Activator.CreateInstance(excelType);
+        if (excelApp == null)
+        {
+            throw new InvalidOperationException("Failed to launch Microsoft Excel COM instance.");
+        }
+
+        try
+        {
+            excelApp.Visible = false;
+            excelApp.DisplayAlerts = false;
+            dynamic wb = excelApp.Workbooks.Open(sourcePath, ReadOnly: true);
+            try
+            {
+                // 51 = xlOpenXMLWorkbook (.xlsx)
+                wb.SaveAs(destPath, 51);
                 return destPath;
             }
             finally

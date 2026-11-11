@@ -80,11 +80,6 @@ public partial class App : Application
             {
                 Log("Another instance is already running (createdNew=false). Shutting down.");
                 Console.WriteLine("\n[O-Tangerine] App is already running in your system tray.");
-                System.Windows.MessageBox.Show(
-                    "O-Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
-                    "O-Tangerine Already Active",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
                 Shutdown();
                 return;
             }
