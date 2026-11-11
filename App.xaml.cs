@@ -35,7 +35,7 @@ public partial class App : Application
     private ImageConverter? _imageConverter;
     private MainWindow? _mainWindow;
 
-    private static void Log(string message)
+    public static void Log(string message)
     {
         try
         {

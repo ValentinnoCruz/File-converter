@@ -181,6 +181,7 @@ public class GlobalInputHook : IDisposable
 
                 if (isShiftDown)
                 {
+                    App.Log($"[InputHook] Shift+Right-Click detected at ({pt.x}, {pt.y})");
                     _isShiftRightPending = true;
 
                     // Immediately return to OS without blocking the low-level hook!
@@ -204,6 +205,7 @@ public class GlobalInputHook : IDisposable
 
                     if (isShiftDown && distSq >= 36)
                     {
+                        App.Log($"[InputHook] Drag + Shift detected at ({pt.x}, {pt.y}), distSq={distSq}");
                         _dragTriggered = true;
                         ThreadPool.QueueUserWorkItem(_ => ProcessDragStartAsync(pt));
                     }
@@ -255,11 +257,13 @@ public class GlobalInputHook : IDisposable
     {
         try
         {
+            App.Log($"[InputHook] ProcessDragStartAsync at ({pt.x}, {pt.y})");
             var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
             var filePaths = _explorerService.GetTargetFilePaths(expPt);
 
             if (filePaths == null || filePaths.Count == 0 || !_imageConverter.CanHandleAll(filePaths))
             {
+                App.Log($"[InputHook] Drag rejected: count={filePaths?.Count ?? 0}, canHandle={_imageConverter.CanHandleAll(filePaths ?? Array.Empty<string>())}");
                 _dragTriggered = false;
                 return;
             }
@@ -267,10 +271,12 @@ public class GlobalInputHook : IDisposable
             var options = _imageConverter.GetOptions(filePaths);
             if (options == null || options.Count == 0)
             {
+                App.Log("[InputHook] Drag rejected: no options available");
                 _dragTriggered = false;
                 return;
             }
 
+            App.Log($"[InputHook] Opening drag radial wheel for {filePaths.Count} files with {options.Count} options");
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 CloseRadialMenu();
@@ -308,7 +314,7 @@ public class GlobalInputHook : IDisposable
         catch (Exception ex)
         {
             _dragTriggered = false;
-            Debug.WriteLine($"Error starting drag radial menu: {ex.Message}");
+            App.Log($"[InputHook] Error starting drag radial menu: {ex}");
         }
     }
 
@@ -316,6 +322,7 @@ public class GlobalInputHook : IDisposable
     {
         try
         {
+            App.Log($"[InputHook] ProcessShiftRightClickAsync at ({pt.x}, {pt.y})");
             var expPt = new ExplorerService.POINT { X = pt.x, Y = pt.y };
             var filePaths = _explorerService.GetTargetFilePaths(expPt);
 
@@ -324,6 +331,7 @@ public class GlobalInputHook : IDisposable
                 var options = _imageConverter.GetOptions(filePaths);
                 if (options != null && options.Count > 0)
                 {
+                    App.Log($"[InputHook] Opening Shift+Right-Click radial wheel for {filePaths.Count} files with {options.Count} options");
                     _currentFilePaths = filePaths;
                     _isRadialMenuOpen = true;
                     _isShiftRightPending = false;
@@ -359,13 +367,14 @@ public class GlobalInputHook : IDisposable
                 }
             }
 
+            App.Log($"[InputHook] Shift+Right-Click pass through (unhandled): count={filePaths?.Count ?? 0}");
             // Not handled by O-Tangerine -> pass through right click so Windows shows default menu
             _isShiftRightPending = false;
             PassThroughRightClick();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error processing shift right click: {ex.Message}");
+            App.Log($"[InputHook] Error processing shift right click: {ex}");
             _isShiftRightPending = false;
             PassThroughRightClick();
         }
@@ -379,6 +388,7 @@ public class GlobalInputHook : IDisposable
 
     private void ExecuteConversion(IReadOnlyList<string> sourceFiles, ConversionOption selectedOption)
     {
+        App.Log($"[InputHook] ExecuteConversion called for {sourceFiles.Count} file(s) -> {selectedOption.Id} ({selectedOption.TargetExtension})");
         if (_currentRadialWindow == null) return;
 
         var windowToClose = _currentRadialWindow;
@@ -399,10 +409,12 @@ public class GlobalInputHook : IDisposable
                 });
 
                 var createdPaths = await _imageConverter.ConvertBatchAsync(sourceFiles, selectedOption.Id);
+                App.Log($"[InputHook] Successfully converted {createdPaths.Count} file(s): {string.Join(", ", createdPaths)}");
                 _onConversionSuccess?.Invoke(createdPaths);
             }
             catch (Exception ex)
             {
+                App.Log($"[InputHook] Conversion failed: {ex}");
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     System.Windows.MessageBox.Show(

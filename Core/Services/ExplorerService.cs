@@ -129,9 +129,48 @@ public class ExplorerService
             dynamic? shell = Activator.CreateInstance(shellType);
             if (shell == null) return results;
 
-            // 1. First, check open Explorer windows for active selected items (instant and 100% reliable)
+            IntPtr hwndUnderPoint = WindowFromPoint(pt);
+            IntPtr rootHwnd = hwndUnderPoint != IntPtr.Zero ? GetAncestor(hwndUnderPoint, GA_ROOT) : IntPtr.Zero;
+            if (rootHwnd == IntPtr.Zero) rootHwnd = hwndUnderPoint;
+            IntPtr fgHwnd = GetForegroundWindow();
+
             dynamic windows = shell.Windows();
             int winCount = (int)windows.Count;
+
+            // 1. First prioritize the active window under cursor or foreground Explorer window
+            for (int i = 0; i < winCount; i++)
+            {
+                try
+                {
+                    dynamic window = windows.Item(i);
+                    IntPtr wHwnd = new IntPtr((long)window.HWND);
+                    if (wHwnd == rootHwnd || (fgHwnd != IntPtr.Zero && wHwnd == fgHwnd))
+                    {
+                        var paths = GetPathsFromWindowDocument(window);
+                        if (paths.Count > 0)
+                        {
+                            App.Log($"[Explorer] Matched active window HWND {wHwnd}, found {paths.Count} selected item(s): {string.Join(", ", paths)}");
+                            return paths.Distinct().ToList();
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 2. Check Desktop for selected items if cursor or foreground is desktop
+            string rootClass = rootHwnd != IntPtr.Zero ? GetWindowClassName(rootHwnd) : "";
+            string fgClass = fgHwnd != IntPtr.Zero ? GetWindowClassName(fgHwnd) : "";
+            if (rootClass is "Progman" or "WorkerW" || fgClass is "Progman" or "WorkerW")
+            {
+                var dPaths = GetDesktopSelectedFilePaths(shell);
+                if (dPaths.Count > 0)
+                {
+                    App.Log($"[Explorer] Matched Desktop, found {dPaths.Count} selected item(s): {string.Join(", ", dPaths)}");
+                    return dPaths.Distinct().ToList();
+                }
+            }
+
+            // 3. Fallback to any open Explorer window with active selection (first non-empty)
             for (int i = 0; i < winCount; i++)
             {
                 try
@@ -140,28 +179,22 @@ public class ExplorerService
                     var paths = GetPathsFromWindowDocument(window);
                     if (paths.Count > 0)
                     {
-                        results.AddRange(paths);
+                        App.Log($"[Explorer] Matched Explorer window {i}, found {paths.Count} selected item(s): {string.Join(", ", paths)}");
+                        return paths.Distinct().ToList();
                     }
                 }
                 catch { }
             }
 
-            // 2. Check Desktop for selected items
-            if (results.Count == 0)
+            // 4. Fallback Desktop
+            var fallbackDesk = GetDesktopSelectedFilePaths(shell);
+            if (fallbackDesk.Count > 0)
             {
-                var dPaths = GetDesktopSelectedFilePaths(shell);
-                if (dPaths.Count > 0)
-                {
-                    results.AddRange(dPaths);
-                }
+                App.Log($"[Explorer] Fallback Desktop, found {fallbackDesk.Count} item(s)");
+                return fallbackDesk.Distinct().ToList();
             }
 
-            if (results.Count > 0)
-            {
-                return results.Distinct().ToList();
-            }
-
-            // 3. Fallback: UI Automation directly at cursor coordinates
+            // 5. Fallback: UI Automation directly at cursor coordinates
             var openFolderPaths = new List<string>();
             for (int i = 0; i < winCount; i++)
             {
@@ -200,13 +233,14 @@ public class ExplorerService
             var uiaPath = GetPathFromUIAutomation(pt, openFolderPaths);
             if (!string.IsNullOrEmpty(uiaPath) && File.Exists(uiaPath))
             {
+                App.Log($"[Explorer] UIAutomation found item: {uiaPath}");
                 results.Add(uiaPath);
                 return results;
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"GetTargetFilePaths error: {ex.Message}");
+            App.Log($"[Explorer] GetTargetFilePaths error: {ex.Message}");
         }
 
         return results.Distinct().ToList();
