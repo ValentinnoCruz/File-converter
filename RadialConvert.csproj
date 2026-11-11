@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.78.0.4327" />
     <PackageReference Include="SkiaSharp" Version="4.153.1" />
   </ItemGroup>
 

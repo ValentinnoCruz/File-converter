@@ -297,4 +297,48 @@ public class ImageConverterTests
         string docxHeader = System.Text.Encoding.ASCII.GetString(docxBytes.Take(2).ToArray());
         Assert.AreEqual("PK", docxHeader, "DOCX file must be a valid Office Open XML ZIP package");
     }
+
+    [TestMethod]
+    public void CanHandle_WordAndExcelFiles()
+    {
+        var converter = new ImageConverter();
+        Assert.IsTrue(converter.CanHandle("document.docx"));
+        Assert.IsTrue(converter.CanHandle("legacy.doc"));
+        Assert.IsTrue(converter.CanHandle("spreadsheet.xlsx"));
+        Assert.IsTrue(converter.CanHandle("legacy.xls"));
+    }
+
+    [TestMethod]
+    public void GetOptions_Word_ReturnsGDocAndPdfAndTxt()
+    {
+        var converter = new ImageConverter();
+        var options = converter.GetOptions(new[] { "proposal.docx" });
+
+        Assert.IsNotNull(options);
+        Assert.AreEqual(3, options.Count);
+        Assert.IsTrue(options.Any(o => o.Id == "GDOC" && o.TargetExtension == ".gdoc"));
+        Assert.IsTrue(options.Any(o => o.Id == "PDF" && o.TargetExtension == ".pdf"));
+        Assert.IsTrue(options.Any(o => o.Id == "TXT" && o.TargetExtension == ".txt"));
+    }
+
+    [TestMethod]
+    public void GetOptions_Excel_ReturnsGSheetAndCsvAndPdf()
+    {
+        var converter = new ImageConverter();
+        var options = converter.GetOptions(new[] { "financials.xlsx" });
+
+        Assert.IsNotNull(options);
+        Assert.AreEqual(3, options.Count);
+        Assert.IsTrue(options.Any(o => o.Id == "GSHEET" && o.TargetExtension == ".gsheet"));
+        Assert.IsTrue(options.Any(o => o.Id == "CSV" && o.TargetExtension == ".csv"));
+        Assert.IsTrue(options.Any(o => o.Id == "PDF" && o.TargetExtension == ".pdf"));
+    }
+
+    [TestMethod]
+    public void GoogleDocsConverter_DiscoversClientSecret()
+    {
+        string secretPath = GoogleDocsConverter.GetSecretFilePath();
+        Assert.IsFalse(string.IsNullOrWhiteSpace(secretPath));
+        Assert.IsTrue(File.Exists(secretPath), $"Client secret file should exist at: {secretPath}");
+    }
 }

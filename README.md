@@ -15,8 +15,14 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
   - The compact **frosted glass radial wheel** instantly blooms around your cursor.
   - Drop the file(s) onto your target format slice (PNG, JPEG, WEBP, PDF, DOCX, etc.) to immediately create converted copies right next to the original files!
   - Drop onto the center hub circle (`DROP`) or press `Escape` to cancel.
-- **Alternative Shift + Right-Click**:
+- **Alternative Shift + Right-Click & Global Hotkey**:
   - Hold `Shift` and right-click on any file(s) in File Explorer to bring up the wheel and convert via click or release.
+  - Or select any file(s) in File Explorer and press **`Ctrl + Shift + X`** to immediately open the wheel at your cursor.
+- **How to Know It's Running**:
+  - **System Tray Icon**: Look for the bright orange citrus icon 🍊 in your taskbar (next to the clock or inside the `^` overflow menu).
+  - **Startup Toast**: When launched, O-Tangerine plays a notification sound and displays a balloon tip: *"O-Tangerine is Running!"*
+  - **Desktop Window Badge**: The main window shows a bright green badge: `🟢 Running & Watching`.
+  - **Test Wheel Button**: Click `🎯 Test Wheel Popup` inside the main window anytime to preview and test the glass radial menu.
 - **Refined Compact Frosted Glass Radial Wheel**:
   - Compact, ergonomic geometry (diameter ~230px) optimized for rapid gesture targeting.
   - Translucent acrylic frosted glass styling with subtle refraction and crisp white specular rim.
@@ -24,6 +30,12 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 - **Microsoft OneNote (`.one`) Document Support**:
   - Convert `.one` notebook files directly to **PDF** and editable **DOC / DOCX**.
   - Retains document structure, embedded media, tables, and typography.
+- **Microsoft Word & Excel → Google Docs & Sheets (Zero Formatting Loss)**:
+  - Convert **Word (`.docx`, `.doc`)** directly to **Google Docs (`.gdoc`)**.
+  - Convert **Excel (`.xlsx`, `.xls`)** directly to **Google Sheets (`.gsheet`)**.
+  - **100% Visual Fidelity**: Leverages Google's cloud conversion engine to preserve all styles, tables, fonts, cell formatting, formulas, charts, and layout without corruption.
+  - Automatically creates the `.gdoc` or `.gsheet` file locally and opens it immediately in your default browser.
+  - Also supports offline **Word → PDF / TXT** and **Excel → CSV / PDF**.
 - **Rich Media & Image Engine**:
   - **Images**: PNG, JPEG, WEBP, BMP, ICO with SkiaSharp hardware-accelerated processing.
   - **Image → PDF**: Bundle or export single/batch images into high-resolution multi-page PDF documents.
@@ -63,8 +75,13 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
                                                 [Converted in-place!]
 ```
 
+### Global Hotkey:
+```
+[Select File(s) in Explorer] ──> [Press Ctrl + Shift + X] ──> [Wheel blooms at cursor!]
+```
+
 ### Desktop Companion Window:
-- Double-click the orange citrus icon in your system tray or run `dotnet run`.
+- Double-click the orange citrus icon in your system tray or the desktop shortcut **O-Tangerine**.
 - Drag and drop files directly into the drop zone, choose an output format from the embedded wheel or dropdown, and click **Convert files**.
 
 ---
@@ -79,14 +96,15 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 │       ├── IFileConverter.cs       # Extensible single & batch converter contract
 │       ├── ImageConverter.cs       # SkiaSharp image transcode, PDF export & FFmpeg bridge
 │       ├── OneNoteConverter.cs     # Microsoft OneNote (.one) to PDF & DOCX pipeline
+│       ├── GoogleDocsConverter.cs  # Word & Excel to Google Docs & Sheets pipeline
 │       ├── ExplorerService.cs      # Multi-selection File Explorer & Desktop resolver
 │       └── GlobalInputHook.cs      # Low-level WH_MOUSE_LL hook for Drag+Shift & Shift+Right-Click
 ├── UI/
 │   ├── RadialGeometryHelper.cs     # Compact sector geometry & polar hit-testing
 │   ├── RadialMenuWindow.xaml       # Compact frosted glass wheel with OLE drag/drop
 │   ├── MainWindow.xaml             # O-Tangerine companion desktop batch window
-│   └── TrayIconManager.cs          # Native notification area tray manager
-├── RadialConvert.Tests/            # Comprehensive unit test suite (12 passing tests)
+│   └── TrayIconManager.cs          # Native notification area tray manager & hotkey listener
+├── RadialConvert.Tests/            # Comprehensive unit test suite (16 passing tests)
 ├── assets/
 │   └── screenshot.png              # O-Tangerine application screenshot
 ├── App.xaml / App.xaml.cs          # Application startup & single-instance lifecycle
@@ -94,7 +112,6 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 ```
 
 ---
-<img width="889" height="720" alt="2026-11-06 14_04_37-Open Tangerine" src="https://github.com/user-attachments/assets/9b435379-53c4-46e4-9158-6f22f3b9fa79" />
 
 ## 🧪 Testing & Execution
 

@@ -1,35 +1,41 @@
 using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.Win32;
 using RadialConvert.Core.Services;
 using RadialConvert.UI;
-using ImageConverter = RadialConvert.Core.Services.ImageConverter;
 
 namespace RadialConvert;
 
-public partial class App : System.Windows.Application
+public partial class App : Application
 {
+    private const int ATTACH_PARENT_PROCESS = -1;
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
 
     [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
+    private static extern bool GetCursorPos(out CURSORPOINT lpPoint);
 
-    private const int ATTACH_PARENT_PROCESS = -1;
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CURSORPOINT
+    {
+        public int X;
+        public int Y;
+    }
 
-    private static Mutex? _singleInstanceMutex;
-    private TrayIconManager? _trayManager;
+    private Mutex? _singleInstanceMutex;
     private GlobalInputHook? _inputHook;
+    private TrayIconManager? _trayManager;
     private ExplorerService? _explorerService;
     private ImageConverter? _imageConverter;
     private MainWindow? _mainWindow;
 
-    private static void Log(string message)
+    public static void Log(string message)
     {
         try
         {
@@ -42,11 +48,15 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Disable WPF Stylus & Touch worker thread to prevent PenIMC DllNotFoundException on Windows
+        AppContext.SetSwitch("Switch.System.Windows.Input.Stylus.DisableStylusAndTouchSupport", true);
+
         base.OnStartup(e);
 
         DispatcherUnhandledException += (s, args) =>
         {
-            Log($"DISPATCHER UNHANDLED EXCEPTION: {args.Exception}");
+            Log($"DISPATCHER UNHANDLED EXCEPTION (HANDLED): {args.Exception}");
+            args.Handled = true; // Prevent crash, keep daemon running
         };
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
@@ -70,11 +80,6 @@ public partial class App : System.Windows.Application
             {
                 Log("Another instance is already running (createdNew=false). Shutting down.");
                 Console.WriteLine("\n[O-Tangerine] App is already running in your system tray.");
-                System.Windows.MessageBox.Show(
-                    "O-Tangerine is already active in your system tray.\nLook for the orange citrus icon in your notification area (bottom right).",
-                    "O-Tangerine Already Active",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
                 Shutdown();
                 return;
             }
@@ -96,6 +101,40 @@ public partial class App : System.Windows.Application
                 _mainWindow.Activate();
             };
 
+            // Hotkey Ctrl + Shift + X trigger
+            _trayManager.OnRequestHotkeyTrigger = () =>
+            {
+                Log("Hotkey Ctrl+Shift+X triggered");
+                GetCursorPos(out var cPt);
+                var expPt = new ExplorerService.POINT { X = cPt.X, Y = cPt.Y };
+                var files = _explorerService.GetTargetFilePaths(expPt);
+                if (files != null && files.Count > 0 && _imageConverter.CanHandleAll(files))
+                {
+                    var options = _imageConverter.GetOptions(files);
+                    if (options != null && options.Count > 0)
+                    {
+                        var win = new RadialMenuWindow(files, options, cPt.X, cPt.Y);
+                        win.OnOptionSelected += (opt) =>
+                        {
+                            Task.Run(async () =>
+                            {
+                                var created = await _imageConverter.ConvertBatchAsync(files, opt.Id);
+                                _trayManager.NotifyConversions(created);
+                            });
+                            win.Close();
+                        };
+                        win.Show();
+                        win.Activate();
+                        return;
+                    }
+                }
+
+                // If no file selected, open main window
+                _mainWindow.Show();
+                _mainWindow.WindowState = WindowState.Normal;
+                _mainWindow.Activate();
+            };
+
             Log("Initializing InputHook...");
             _inputHook = new GlobalInputHook(
                 _explorerService,
@@ -106,13 +145,19 @@ public partial class App : System.Windows.Application
                 });
 
             _inputHook.Start();
-            Log("InputHook started successfully.");
+            Log($"InputHook started successfully, IsRunning={_inputHook.IsRunning}.");
+
+            // Ensure startup shortcut / registry is active
+            TrayIconManager.SetStartup(true);
+
+            // Pop balloon tip & chime
+            _trayManager.NotifyStartup();
 
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("  O-Tangerine (Windows Native) is running!");
             Console.WriteLine("  - Desktop batch window opened.");
-            Console.WriteLine("  - Drag any file(s) while holding SHIFT, or Shift+Right-Click");
-            Console.WriteLine("    to open the frosted glass conversion wheel.");
+            Console.WriteLine("  - Drag any file(s) while holding SHIFT, or Shift+Right-Click,");
+            Console.WriteLine("    or press Ctrl+Shift+X to open the conversion wheel.");
             Console.WriteLine("=======================================================\n");
 
             // Show window by default unless user launched explicitly with --background
@@ -138,7 +183,11 @@ public partial class App : System.Windows.Application
         Log($"App.OnExit called with ExitCode={e.ApplicationExitCode}. CallStack:\n{Environment.StackTrace}");
         _inputHook?.Dispose();
         _trayManager?.Dispose();
-        _singleInstanceMutex?.ReleaseMutex();
+        try
+        {
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+        catch { }
         _singleInstanceMutex?.Dispose();
 
         base.OnExit(e);

@@ -51,11 +51,10 @@ public partial class MainWindow : Window
         _embeddedPaths.Clear();
         _embeddedLabels.Clear();
 
+        if (_standardFormats.Count == 0) return;
+
         var center = new Point(180, 180);
         int count = _standardFormats.Count;
-        if (count == 0) return;
-
-        if (_selectedWheelIndex >= count) _selectedWheelIndex = 0;
 
         for (int i = 0; i < count; i++)
         {
@@ -168,37 +167,11 @@ public partial class MainWindow : Window
     private void DropContainer_Drop(object sender, DragEventArgs e)
     {
         DropContainer.BorderBrush = new SolidColorBrush(Color.FromRgb(0x38, 0x38, 0x4A));
-
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            string[]? files = (string[]?)e.Data.GetData(DataFormats.FileDrop);
-            if (files != null)
-            {
-                AddFilesToQueue(files);
-            }
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            AddFiles(files);
         }
-    }
-
-    private void AddFilesToQueue(IEnumerable<string> files)
-    {
-        foreach (var file in files)
-        {
-            if (File.Exists(file) && !_fileList.Contains(file))
-            {
-                _fileList.Add(file);
-            }
-        }
-
-        RefreshAvailableFormats();
-        UpdateListVisibility();
-    }
-
-    private void UpdateListVisibility()
-    {
-        bool hasFiles = _fileList.Count > 0;
-        EmptyPrompt.Visibility = hasFiles ? Visibility.Collapsed : Visibility.Visible;
-        FilesListBox.Visibility = hasFiles ? Visibility.Visible : Visibility.Collapsed;
-        ConvertButton.IsEnabled = hasFiles;
     }
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -208,34 +181,88 @@ public partial class MainWindow : Window
             Multiselect = true,
             Title = "Select files to convert"
         };
-
         if (dlg.ShowDialog() == true)
         {
-            AddFilesToQueue(dlg.FileNames);
+            AddFiles(dlg.FileNames);
         }
+    }
+
+    private void AddFiles(IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (File.Exists(path) && !_fileList.Contains(path))
+            {
+                _fileList.Add(path);
+            }
+        }
+
+        EmptyPrompt.Visibility = _fileList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        FilesListBox.Visibility = _fileList.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RefreshAvailableFormats();
     }
 
     private void ClearFiles_Click(object sender, RoutedEventArgs e)
     {
         _fileList.Clear();
+        EmptyPrompt.Visibility = Visibility.Visible;
+        FilesListBox.Visibility = Visibility.Collapsed;
         RefreshAvailableFormats();
-        UpdateListVisibility();
         StatusMessage.Text = "";
-        JobProgressBar.Visibility = Visibility.Collapsed;
     }
 
     private void OutputFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog
+        var dlg = new OpenFolderDialog
         {
-            Title = "Choose Output Folder"
+            Title = "Choose output directory"
         };
-
-        if (dialog.ShowDialog() == true)
+        if (dlg.ShowDialog() == true)
         {
-            _customOutputFolder = dialog.FolderName;
-            OutputFolderButton.Content = "Folder: " + System.IO.Path.GetFileName(_customOutputFolder);
+            _customOutputFolder = dlg.FolderName;
+            OutputFolderButton.Content = System.IO.Path.GetFileName(_customOutputFolder);
         }
+    }
+
+    private void TestWheel_Click(object sender, RoutedEventArgs e)
+    {
+        var sampleFiles = _fileList.Count > 0 ? _fileList.ToList() : new List<string> { "sample.webp" };
+        var options = _converter.GetOptions(sampleFiles);
+        if (options.Count == 0)
+        {
+            options = new List<ConversionOption>
+            {
+                new() { Id = "PNG", DisplayName = "PNG", TargetExtension = ".png" },
+                new() { Id = "JPEG", DisplayName = "JPEG", TargetExtension = ".jpg" },
+                new() { Id = "WEBP", DisplayName = "WEBP", TargetExtension = ".webp" },
+                new() { Id = "PDF", DisplayName = "PDF", TargetExtension = ".pdf" },
+                new() { Id = "DOCX", DisplayName = "DOCX", TargetExtension = ".docx" }
+            };
+        }
+
+        var centerDip = new Point(ActualWidth > 0 ? ActualWidth / 2.0 : Width / 2.0, ActualHeight > 0 ? ActualHeight / 2.0 : Height / 2.0);
+        Point centerPhys;
+        try
+        {
+            centerPhys = PointToScreen(centerDip);
+        }
+        catch
+        {
+            centerPhys = new Point(Left + Width / 2.0, Top + Height / 2.0);
+        }
+
+        var testWindow = new RadialMenuWindow(sampleFiles, options, centerPhys.X, centerPhys.Y);
+        testWindow.OnOptionSelected += (opt) =>
+        {
+            MessageBox.Show(
+                $"Option chosen: {opt.DisplayName} ({opt.TargetExtension})\n\nIn Explorer, dropping on this format slice creates the converted file instantly!",
+                "O-Tangerine Glass Wheel",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            testWindow.Close();
+        };
+        testWindow.Show();
+        testWindow.Activate();
     }
 
     private async void Convert_Click(object sender, RoutedEventArgs e)

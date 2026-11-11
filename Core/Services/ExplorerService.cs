@@ -35,43 +35,84 @@ public class ExplorerService
         public int Y;
     }
 
+    private static int _cachedExplorerPid = -1;
+    private static DateTime _lastPidCheck = DateTime.MinValue;
+
+    public static bool IsExplorerProcess(uint pid)
+    {
+        if (pid == 0) return false;
+        if (_cachedExplorerPid > 0 && pid == (uint)_cachedExplorerPid && (DateTime.UtcNow - _lastPidCheck).TotalSeconds < 30)
+        {
+            return true;
+        }
+
+        try
+        {
+            var proc = Process.GetProcessById((int)pid);
+            bool isExp = string.Equals(proc.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase);
+            if (isExp)
+            {
+                _cachedExplorerPid = (int)pid;
+                _lastPidCheck = DateTime.UtcNow;
+            }
+            return isExp;
+        }
+        catch { return false; }
+    }
+
     public bool IsExplorerOrDesktopWindow(POINT pt, out IntPtr rootHwnd)
     {
         rootHwnd = IntPtr.Zero;
-        IntPtr hwndUnderPoint = WindowFromPoint(pt);
-        if (hwndUnderPoint == IntPtr.Zero) return false;
-
-        rootHwnd = GetAncestor(hwndUnderPoint, GA_ROOT);
-        if (rootHwnd == IntPtr.Zero) rootHwnd = hwndUnderPoint;
-
-        string className = GetWindowClassName(rootHwnd);
-        string childClass = GetWindowClassName(hwndUnderPoint);
-
-        // Standard Explorer, Windows 11 Tabs, legacy Explorer, or Desktop
-        if (className is "CabinetWClass" or "ExploreWClass" or "Progman" or "WorkerW")
+        try
         {
-            return true;
-        }
-
-        if (childClass is "SHELLDLL_DefView" or "DirectUIHWND" or "SysListView32" or "XamlWidgetHostInputSinkWindow" or "XamlExplorerHostIslandWindow")
-        {
-            return true;
-        }
-
-        // Process check: Is the window owned by explorer.exe?
-        GetWindowThreadProcessId(hwndUnderPoint, out uint pid);
-        if (pid > 0)
-        {
-            try
+            IntPtr hwndUnderPoint = WindowFromPoint(pt);
+            if (hwndUnderPoint != IntPtr.Zero)
             {
-                var proc = Process.GetProcessById((int)pid);
-                if (string.Equals(proc.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase))
+                rootHwnd = GetAncestor(hwndUnderPoint, GA_ROOT);
+                if (rootHwnd == IntPtr.Zero) rootHwnd = hwndUnderPoint;
+
+                string className = GetWindowClassName(rootHwnd);
+                string childClass = GetWindowClassName(hwndUnderPoint);
+
+                // Standard Explorer, Windows 11 Tabs, legacy Explorer, or Desktop
+                if (className is "CabinetWClass" or "ExploreWClass" or "Progman" or "WorkerW")
+                {
+                    return true;
+                }
+
+                if (childClass is "SHELLDLL_DefView" or "DirectUIHWND" or "SysListView32" or "XamlWidgetHostInputSinkWindow" or "XamlExplorerHostIslandWindow")
+                {
+                    return true;
+                }
+
+                // Process check: Is the window owned by explorer.exe?
+                GetWindowThreadProcessId(hwndUnderPoint, out uint pid);
+                if (pid > 0 && IsExplorerProcess(pid))
                 {
                     return true;
                 }
             }
-            catch { }
+
+            // Fallback: check foreground window
+            IntPtr fg = GetForegroundWindow();
+            if (fg != IntPtr.Zero)
+            {
+                string fgClass = GetWindowClassName(fg);
+                if (fgClass is "CabinetWClass" or "ExploreWClass" or "Progman" or "WorkerW")
+                {
+                    rootHwnd = fg;
+                    return true;
+                }
+
+                GetWindowThreadProcessId(fg, out uint fgPid);
+                if (fgPid > 0 && IsExplorerProcess(fgPid))
+                {
+                    rootHwnd = fg;
+                    return true;
+                }
+            }
         }
+        catch { }
 
         return false;
     }
@@ -82,22 +123,80 @@ public class ExplorerService
 
         try
         {
-            if (!IsExplorerOrDesktopWindow(pt, out IntPtr rootHwnd))
-            {
-                return results;
-            }
-
-            string rootClass = GetWindowClassName(rootHwnd);
             Type? shellType = Type.GetTypeFromProgID("Shell.Application");
             if (shellType == null) return results;
 
             dynamic? shell = Activator.CreateInstance(shellType);
             if (shell == null) return results;
 
-            // Collect all candidate open folder paths + standard user folders
-            var openFolderPaths = new List<string>();
+            IntPtr hwndUnderPoint = WindowFromPoint(pt);
+            IntPtr rootHwnd = hwndUnderPoint != IntPtr.Zero ? GetAncestor(hwndUnderPoint, GA_ROOT) : IntPtr.Zero;
+            if (rootHwnd == IntPtr.Zero) rootHwnd = hwndUnderPoint;
+            IntPtr fgHwnd = GetForegroundWindow();
+
             dynamic windows = shell.Windows();
-            for (int i = 0; i < windows.Count; i++)
+            int winCount = (int)windows.Count;
+
+            // 1. First prioritize the active window under cursor or foreground Explorer window
+            for (int i = 0; i < winCount; i++)
+            {
+                try
+                {
+                    dynamic window = windows.Item(i);
+                    IntPtr wHwnd = new IntPtr((long)window.HWND);
+                    if (wHwnd == rootHwnd || (fgHwnd != IntPtr.Zero && wHwnd == fgHwnd))
+                    {
+                        var paths = GetPathsFromWindowDocument(window);
+                        if (paths.Count > 0)
+                        {
+                            App.Log($"[Explorer] Matched active window HWND {wHwnd}, found {paths.Count} selected item(s): {string.Join(", ", paths)}");
+                            return paths.Distinct().ToList();
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 2. Check Desktop for selected items if cursor or foreground is desktop
+            string rootClass = rootHwnd != IntPtr.Zero ? GetWindowClassName(rootHwnd) : "";
+            string fgClass = fgHwnd != IntPtr.Zero ? GetWindowClassName(fgHwnd) : "";
+            if (rootClass is "Progman" or "WorkerW" || fgClass is "Progman" or "WorkerW")
+            {
+                var dPaths = GetDesktopSelectedFilePaths(shell);
+                if (dPaths.Count > 0)
+                {
+                    App.Log($"[Explorer] Matched Desktop, found {dPaths.Count} selected item(s): {string.Join(", ", dPaths)}");
+                    return dPaths.Distinct().ToList();
+                }
+            }
+
+            // 3. Fallback to any open Explorer window with active selection (first non-empty)
+            for (int i = 0; i < winCount; i++)
+            {
+                try
+                {
+                    dynamic window = windows.Item(i);
+                    var paths = GetPathsFromWindowDocument(window);
+                    if (paths.Count > 0)
+                    {
+                        App.Log($"[Explorer] Matched Explorer window {i}, found {paths.Count} selected item(s): {string.Join(", ", paths)}");
+                        return paths.Distinct().ToList();
+                    }
+                }
+                catch { }
+            }
+
+            // 4. Fallback Desktop
+            var fallbackDesk = GetDesktopSelectedFilePaths(shell);
+            if (fallbackDesk.Count > 0)
+            {
+                App.Log($"[Explorer] Fallback Desktop, found {fallbackDesk.Count} item(s)");
+                return fallbackDesk.Distinct().ToList();
+            }
+
+            // 5. Fallback: UI Automation directly at cursor coordinates
+            var openFolderPaths = new List<string>();
+            for (int i = 0; i < winCount; i++)
             {
                 try
                 {
@@ -131,42 +230,17 @@ public class ExplorerService
                 }
             }
 
-            // 1. First try UI Automation directly at cursor coordinates (most accurate to user click)
             var uiaPath = GetPathFromUIAutomation(pt, openFolderPaths);
             if (!string.IsNullOrEmpty(uiaPath) && File.Exists(uiaPath))
             {
+                App.Log($"[Explorer] UIAutomation found item: {uiaPath}");
                 results.Add(uiaPath);
                 return results;
-            }
-
-            // 2. Try currently selected items in all active windows
-            for (int i = 0; i < windows.Count; i++)
-            {
-                try
-                {
-                    dynamic window = windows.Item(i);
-                    var paths = GetPathsFromWindowDocument(window);
-                    if (paths.Count > 0)
-                    {
-                        results.AddRange(paths);
-                    }
-                }
-                catch { }
-            }
-
-            // 3. Desktop items if clicking desktop
-            if (rootClass is "Progman" or "WorkerW")
-            {
-                var dPaths = GetDesktopSelectedFilePaths(shell);
-                if (dPaths.Count > 0)
-                {
-                    results.AddRange(dPaths);
-                }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"GetTargetFilePaths error: {ex.Message}");
+            App.Log($"[Explorer] GetTargetFilePaths error: {ex.Message}");
         }
 
         return results.Distinct().ToList();
