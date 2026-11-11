@@ -30,6 +30,12 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 - **Microsoft OneNote (`.one`) Document Support**:
   - Convert `.one` notebook files directly to **PDF** and editable **DOC / DOCX**.
   - Retains document structure, embedded media, tables, and typography.
+- **Microsoft Word & Excel → Google Docs & Sheets (Zero Formatting Loss)**:
+  - Convert **Word (`.docx`, `.doc`)** directly to **Google Docs (`.gdoc`)**.
+  - Convert **Excel (`.xlsx`, `.xls`)** directly to **Google Sheets (`.gsheet`)**.
+  - **100% Visual Fidelity**: Leverages Google's cloud conversion engine to preserve all styles, tables, fonts, cell formatting, formulas, charts, and layout without corruption.
+  - Automatically creates the `.gdoc` or `.gsheet` file locally and opens it immediately in your default browser.
+  - Also supports offline **Word → PDF / TXT** and **Excel → CSV / PDF**.
 - **Rich Media & Image Engine**:
   - **Images**: PNG, JPEG, WEBP, BMP, ICO with SkiaSharp hardware-accelerated processing.
   - **Image → PDF**: Bundle or export single/batch images into high-resolution multi-page PDF documents.
@@ -90,6 +96,7 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 │       ├── IFileConverter.cs       # Extensible single & batch converter contract
 │       ├── ImageConverter.cs       # SkiaSharp image transcode, PDF export & FFmpeg bridge
 │       ├── OneNoteConverter.cs     # Microsoft OneNote (.one) to PDF & DOCX pipeline
+│       ├── GoogleDocsConverter.cs  # Word & Excel to Google Docs & Sheets pipeline
 │       ├── ExplorerService.cs      # Multi-selection File Explorer & Desktop resolver
 │       └── GlobalInputHook.cs      # Low-level WH_MOUSE_LL hook for Drag+Shift & Shift+Right-Click
 ├── UI/
@@ -97,7 +104,7 @@ A high-performance, native Windows file conversion suite inspired by **[Open Tan
 │   ├── RadialMenuWindow.xaml       # Compact frosted glass wheel with OLE drag/drop
 │   ├── MainWindow.xaml             # O-Tangerine companion desktop batch window
 │   └── TrayIconManager.cs          # Native notification area tray manager & hotkey listener
-├── RadialConvert.Tests/            # Comprehensive unit test suite (12 passing tests)
+├── RadialConvert.Tests/            # Comprehensive unit test suite (16 passing tests)
 ├── assets/
 │   └── screenshot.png              # O-Tangerine application screenshot
 ├── App.xaml / App.xaml.cs          # Application startup & single-instance lifecycle

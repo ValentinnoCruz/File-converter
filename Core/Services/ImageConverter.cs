@@ -25,6 +25,7 @@ public class ImageConverter : IFileConverter
     };
 
     private readonly OneNoteConverter _oneNoteConverter = new();
+    private readonly GoogleDocsConverter _googleDocsConverter = new();
     private string? _ffmpegPath;
 
     public ImageConverter()
@@ -87,6 +88,7 @@ public class ImageConverter : IFileConverter
         if (string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(ext, ".srt", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".vtt", StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(ext, ".one", StringComparison.OrdinalIgnoreCase) && _oneNoteConverter.CanHandle(filePath)) return true;
+        if (_googleDocsConverter.CanHandle(filePath)) return true;
         if (SupportedMediaExtensions.Contains(ext) && IsFfmpegAvailable) return true;
         return false;
     }
@@ -196,6 +198,11 @@ public class ImageConverter : IFileConverter
         {
             return _oneNoteConverter.GetOptions(filePaths[0]);
         }
+        // Case 5: Microsoft Word & Excel -> Google Docs / Sheets
+        else if (filePaths.All(_googleDocsConverter.CanHandle))
+        {
+            return _googleDocsConverter.GetOptions(filePaths);
+        }
 
         return options;
     }
@@ -260,6 +267,12 @@ public class ImageConverter : IFileConverter
             if (srcExt == ".one")
             {
                 return _oneNoteConverter.ConvertAsync(sourcePath, normalizedTarget, cancellationToken).GetAwaiter().GetResult();
+            }
+
+            // Microsoft Word / Excel -> Google Docs / Sheets / PDF / CSV
+            if (_googleDocsConverter.CanHandle(sourcePath))
+            {
+                return _googleDocsConverter.ConvertAsync(sourcePath, normalizedTarget, cancellationToken).GetAwaiter().GetResult();
             }
 
             // Image to PDF conversion
