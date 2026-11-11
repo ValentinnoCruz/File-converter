@@ -188,7 +188,11 @@ public partial class App : Application
         Log($"App.OnExit called with ExitCode={e.ApplicationExitCode}. CallStack:\n{Environment.StackTrace}");
         _inputHook?.Dispose();
         _trayManager?.Dispose();
-        _singleInstanceMutex?.ReleaseMutex();
+        try
+        {
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+        catch { }
         _singleInstanceMutex?.Dispose();
 
         base.OnExit(e);

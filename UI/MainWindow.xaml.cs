@@ -240,10 +240,18 @@ public partial class MainWindow : Window
             };
         }
 
-        double x = Left + Width / 2.0;
-        double y = Top + Height / 2.0;
+        var centerDip = new Point(ActualWidth > 0 ? ActualWidth / 2.0 : Width / 2.0, ActualHeight > 0 ? ActualHeight / 2.0 : Height / 2.0);
+        Point centerPhys;
+        try
+        {
+            centerPhys = PointToScreen(centerDip);
+        }
+        catch
+        {
+            centerPhys = new Point(Left + Width / 2.0, Top + Height / 2.0);
+        }
 
-        var testWindow = new RadialMenuWindow(sampleFiles, options, x, y);
+        var testWindow = new RadialMenuWindow(sampleFiles, options, centerPhys.X, centerPhys.Y);
         testWindow.OnOptionSelected += (opt) =>
         {
             MessageBox.Show(

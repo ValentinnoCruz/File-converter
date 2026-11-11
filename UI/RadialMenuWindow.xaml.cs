@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,11 +16,76 @@ namespace RadialConvert.UI;
 
 public partial class RadialMenuWindow : Window
 {
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    private const uint SWP_SHOWWINDOW = 0x0040;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    private (double ScaleX, double ScaleY) GetDpiScaleForPoint(double screenX, double screenY)
+    {
+        try
+        {
+            var pt = new POINT { X = (int)Math.Round(screenX), Y = (int)Math.Round(screenY) };
+            IntPtr hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            if (hMon != IntPtr.Zero)
+            {
+                if (GetDpiForMonitor(hMon, 0, out uint dpiX, out uint dpiY) == 0 && dpiX > 0)
+                {
+                    return (dpiX / 96.0, dpiY / 96.0);
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            var dpi = VisualTreeHelper.GetDpi(this);
+            if (dpi.DpiScaleX > 0)
+            {
+                return (dpi.DpiScaleX, dpi.DpiScaleY);
+            }
+        }
+        catch { }
+
+        try
+        {
+            uint sysDpi = GetDpiForSystem();
+            if (sysDpi > 0)
+            {
+                return (sysDpi / 96.0, sysDpi / 96.0);
+            }
+        }
+        catch { }
+
+        return (1.0, 1.0);
+    }
     private IReadOnlyList<string> _sourceFilePaths;
     private IReadOnlyList<ConversionOption> _options;
     private readonly Point _centerPoint = new Point(135.0, 135.0);
     private double _originScreenX;
     private double _originScreenY;
+    private double _scaleX = 1.0;
+    private double _scaleY = 1.0;
     private int _hoveredIndex = -1;
 
     private readonly List<WpfPath> _slicePaths = new();
@@ -101,7 +168,7 @@ public partial class RadialMenuWindow : Window
         MouseMove += (s, e) =>
         {
             var p = e.GetPosition(this);
-            UpdateCursor(Left + p.X, Top + p.Y);
+            UpdateLocalCursor(p);
         };
 
         // Wire OLE Drag & Drop events
@@ -146,8 +213,42 @@ public partial class RadialMenuWindow : Window
         _originScreenX = screenX;
         _originScreenY = screenY;
 
-        Left = screenX - 135.0;
-        Top = screenY - 135.0;
+        var (scaleX, scaleY) = GetDpiScaleForPoint(screenX, screenY);
+        _scaleX = scaleX;
+        _scaleY = scaleY;
+
+        // Convert physical screen coordinates to WPF DIPs
+        double dipCursorX = screenX / _scaleX;
+        double dipCursorY = screenY / _scaleY;
+
+        // Center the 270x270 wheel (center at 135, 135) exactly over the cursor
+        Left = dipCursorX - 135.0;
+        Top = dipCursorY - 135.0;
+
+        App.Log($"[RadialWindow] Positioned at physical ({screenX}, {screenY}) -> DIPs ({Left:F1}, {Top:F1}), Scale={_scaleX:F3}x{_scaleY:F3}");
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        try
+        {
+            var helper = new WindowInteropHelper(this);
+            if (helper.Handle != IntPtr.Zero)
+            {
+                int physX = (int)Math.Round(_originScreenX - (135.0 * _scaleX));
+                int physY = (int)Math.Round(_originScreenY - (135.0 * _scaleY));
+                int physWidth = (int)Math.Round(Width * _scaleX);
+                int physHeight = (int)Math.Round(Height * _scaleY);
+
+                SetWindowPos(helper.Handle, HWND_TOPMOST, physX, physY, physWidth, physHeight, SWP_SHOWWINDOW);
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[RadialWindow] OnSourceInitialized SetWindowPos error: {ex.Message}");
+        }
     }
 
     private void BuildSlices()
@@ -244,7 +345,7 @@ public partial class RadialMenuWindow : Window
             e.Effects = DragDropEffects.Copy;
             e.Handled = true;
             var p = e.GetPosition(this);
-            UpdateCursor(Left + p.X, Top + p.Y);
+            UpdateLocalCursor(p);
         }
         else
         {
@@ -278,21 +379,24 @@ public partial class RadialMenuWindow : Window
         Close();
     }
 
-    public void UpdateCursor(double screenX, double screenY)
+    public void UpdateLocalCursor(Point localPoint)
     {
         if (_options == null || _options.Count == 0) return;
-
-        double localX = screenX - Left;
-        double localY = screenY - Top;
-        var localPoint = new Point(localX, localY);
-
         int newHoveredIndex = RadialGeometryHelper.GetSectorIndex(localPoint, _centerPoint, _options.Count);
-
         if (newHoveredIndex != _hoveredIndex)
         {
             _hoveredIndex = newHoveredIndex;
             HighlightHoveredSlice(_hoveredIndex);
         }
+    }
+
+    public void UpdateCursor(double screenX, double screenY)
+    {
+        double dipCursorX = screenX / _scaleX;
+        double dipCursorY = screenY / _scaleY;
+        double localX = dipCursorX - Left;
+        double localY = dipCursorY - Top;
+        UpdateLocalCursor(new Point(localX, localY));
     }
 
     private void HighlightHoveredSlice(int index)
